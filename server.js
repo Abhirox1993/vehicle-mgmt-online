@@ -9,6 +9,7 @@ const { exec } = require('child_process');
 const crypto = require('crypto');
 
 const app = express();
+app.set('trust proxy', 1); // Required for Render sessions
 const port = process.env.PORT || 3000;
 const SECRET_SALT = 'vms-license-salt-2025';
 
@@ -76,7 +77,10 @@ if (useTurso) {
         run: (sql, params, callback) => {
             if (typeof params === 'function') { callback = params; params = []; }
             client.execute({ sql, args: params || [] })
-                .then(res => callback && callback(null, { lastID: res.lastInsertRowid, changes: Number(res.rowsAffected) }))
+                .then(res => callback && callback(null, {
+                    lastID: res.lastInsertRowid ? String(res.lastInsertRowid) : null,
+                    changes: Number(res.rowsAffected)
+                }))
                 .catch(err => callback && callback(err));
         },
         get: (sql, params, callback) => {
@@ -246,9 +250,13 @@ app.post('/api/login', (req, res) => {
         if (!user || !bcrypt.compareSync(password, user.password)) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
-        req.session.userId = user.id;
-        req.session.role = user.role; // Store role in session
-        res.json({ success: true, role: user.role });
+        // Save as strings to avoid BigInt serialization issues in sessions
+        req.session.userId = String(user.id);
+        req.session.role = String(user.role);
+        req.session.save((err) => {
+            if (err) return res.status(500).json({ error: 'Session save failed' });
+            res.json({ success: true, role: user.role });
+        });
     });
 });
 
@@ -291,6 +299,14 @@ app.post('/api/activate', (req, res) => {
 // Public Static Files
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 
+app.get('/login.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+// Protected Section
+app.use(requireValidLicense);
+app.use(isAuthenticated);
+
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -302,10 +318,6 @@ app.get('/index.html', (req, res) => {
 app.get('/report.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'report.html'));
 });
-
-// Protected Section
-app.use(requireValidLicense);
-app.use(isAuthenticated);
 
 // User Management Endpoints
 app.get('/api/users/me', (req, res) => {
