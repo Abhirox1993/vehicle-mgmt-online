@@ -74,19 +74,22 @@ if (useTurso) {
     db = {
         run: (sql, params, callback) => {
             if (typeof params === 'function') { callback = params; params = []; }
-            client.execute({ sql, args: params || [] })
-                .then(res => callback && callback(null, { lastID: res.lastInsertRowid, changes: Number(res.rowsAffected) }))
+            const args = Array.isArray(params) ? params : [params];
+            client.execute({ sql, args })
+                .then(res => callback && callback.call({ lastID: res.lastInsertRowid, changes: Number(res.rowsAffected) }, null))
                 .catch(err => callback && callback(err));
         },
         get: (sql, params, callback) => {
             if (typeof params === 'function') { callback = params; params = []; }
-            client.execute({ sql, args: params || [] })
+            const args = Array.isArray(params) ? params : [params];
+            client.execute({ sql, args })
                 .then(res => callback && callback(null, res.rows[0]))
                 .catch(err => callback && callback(err));
         },
         all: (sql, params, callback) => {
             if (typeof params === 'function') { callback = params; params = []; }
-            client.execute({ sql, args: params || [] })
+            const args = Array.isArray(params) ? params : [params];
+            client.execute({ sql, args })
                 .then(res => callback && callback(null, res.rows))
                 .catch(err => callback && callback(err));
         },
@@ -94,8 +97,10 @@ if (useTurso) {
         prepare: (sql) => {
             return {
                 run: (params, callback) => {
-                    client.execute({ sql, args: params || [] })
-                        .then(() => callback && callback(null))
+                    if (typeof params === 'function') { callback = params; params = []; }
+                    const args = Array.isArray(params) ? params : [params];
+                    client.execute({ sql, args })
+                        .then(res => callback && callback.call({ lastID: res.lastInsertRowid, changes: Number(res.rowsAffected) }, null))
                         .catch(err => callback && callback(err));
                 },
                 finalize: (callback) => callback && callback(null)
