@@ -12,3 +12,5 @@ services:
         sync: false
       - key: TURSO_AUTH_TOKEN
         sync: false
+      - key: ENCRYPTION_KEY
+        generateValue: true

@@ -9,8 +9,37 @@ const { exec } = require('child_process');
 const crypto = require('crypto');
 
 const app = express();
+app.set('trust proxy', 1); // Required for Render sessions
 const port = process.env.PORT || 3000;
 const SECRET_SALT = 'vms-license-salt-2025';
+
+// Encryption Setup
+const ENCRYPTION_ALGO = 'aes-256-cbc';
+const ENCRYPTION_KEY = Buffer.from(process.env.ENCRYPTION_KEY || '6c390508f7b3e6488730b20e03e7e4566c390508f7b3e6488730b20e03e7e456', 'hex'); // Default for development
+
+function encrypt(text) {
+    if (!text) return text;
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv(ENCRYPTION_ALGO, ENCRYPTION_KEY, iv);
+    let encrypted = cipher.update(text, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    return iv.toString('hex') + ':' + encrypted;
+}
+
+function decrypt(text) {
+    if (!text || !text.includes(':')) return text;
+    try {
+        const parts = text.split(':');
+        const iv = Buffer.from(parts[0], 'hex');
+        const encryptedText = Buffer.from(parts[1], 'hex');
+        const decipher = crypto.createDecipheriv(ENCRYPTION_ALGO, ENCRYPTION_KEY, iv);
+        let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+        return decrypted;
+    } catch (e) {
+        return text; // Return as-is if decryption fails
+    }
+}
 
 // Determine if running in packaged environment or via VMS_Engine
 const isPkg = typeof process.pkg !== 'undefined';
@@ -23,14 +52,33 @@ const baseDir = (isPkg || isVmsEngine)
 const dbPath = process.env.DATABASE_URL || path.join(baseDir, 'database.sqlite');
 
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin: true,
+    credentials: true
+}));
 app.use(bodyParser.json());
 app.use(session({
-    secret: 'antigravity-secret-key',
+    name: 'vms.sid',
+    secret: 'vms-ultra-secret-key-2025',
     resave: false,
     saveUninitialized: false,
-    cookie: { maxAge: 24 * 60 * 60 * 1000 } // 24 hours
+    proxy: true,
+    cookie: {
+        maxAge: 24 * 60 * 60 * 1000,
+        secure: true,
+        httpOnly: true,
+        sameSite: 'lax' // Better compatibility for same-site apps
+    }
 }));
+
+// Granular Logging for Debugging
+app.use((req, res, next) => {
+    if (req.path.startsWith('/api/') && req.path !== '/api/login') {
+        const hasSession = !!req.session.userId;
+        console.log(`[API] ${req.method} ${req.path} | Authenticated: ${hasSession} | SID: ${req.sessionID.substring(0, 8)}...`);
+    }
+    next();
+});
 
 // Database Setup
 let db;
@@ -48,7 +96,10 @@ if (useTurso) {
         run: (sql, params, callback) => {
             if (typeof params === 'function') { callback = params; params = []; }
             client.execute({ sql, args: params || [] })
-                .then(res => callback && callback(null, { lastID: res.lastInsertRowid, changes: Number(res.rowsAffected) }))
+                .then(res => callback && callback(null, {
+                    lastID: res.lastInsertRowid ? String(res.lastInsertRowid) : null,
+                    changes: Number(res.rowsAffected)
+                }))
                 .catch(err => callback && callback(err));
         },
         get: (sql, params, callback) => {
@@ -193,11 +244,13 @@ function requireValidLicense(req, res, next) {
 
 // Auth Middleware
 function isAuthenticated(req, res, next) {
-    if (req.session.userId) {
+    if (req.session && req.session.userId) {
         return next();
     }
+
     if (req.path.startsWith('/api/')) {
-        return res.status(401).json({ error: 'Unauthorized' });
+        console.warn(`[Blocked] Unauthorized API access to ${req.path} | Session object exists: ${!!req.session}`);
+        return res.status(401).json({ error: 'Unauthorized', message: 'Please log in again' });
     }
     res.redirect('/login.html');
 }
@@ -218,9 +271,13 @@ app.post('/api/login', (req, res) => {
         if (!user || !bcrypt.compareSync(password, user.password)) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
-        req.session.userId = user.id;
-        req.session.role = user.role; // Store role in session
-        res.json({ success: true, role: user.role });
+        // Save as strings to avoid BigInt serialization issues in sessions
+        req.session.userId = String(user.id);
+        req.session.role = String(user.role);
+        req.session.save((err) => {
+            if (err) return res.status(500).json({ error: 'Session save failed' });
+            res.json({ success: true, role: user.role });
+        });
     });
 });
 
@@ -263,6 +320,14 @@ app.post('/api/activate', (req, res) => {
 // Public Static Files
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 
+app.get('/login.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+// Protected Section
+app.use(requireValidLicense);
+app.use(isAuthenticated);
+
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -274,10 +339,6 @@ app.get('/index.html', (req, res) => {
 app.get('/report.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'report.html'));
 });
-
-// Protected Section
-app.use(requireValidLicense);
-app.use(isAuthenticated);
 
 // User Management Endpoints
 app.get('/api/users/me', (req, res) => {
@@ -533,7 +594,6 @@ app.get('/api/vehicles', (req, res) => {
     const role = req.session.role;
 
     if (role === 'admin') {
-        // Admin sees ALL, plus owner info
         const sql = `
             SELECT v.*, u.username as owner_username 
             FROM vehicles v 
@@ -543,20 +603,21 @@ app.get('/api/vehicles', (req, res) => {
             if (err) return res.status(500).json({ error: err.message });
             const updatedRows = rows.map(v => ({
                 ...v,
+                ownerName: decrypt(v.ownerName),
+                idNumber: decrypt(v.idNumber),
+                plateNumber: decrypt(v.plateNumber),
+                vehicleName: decrypt(v.vehicleName),
                 status: calculateStatus(v.permitExpiryDate, v.isOnHold),
                 access_level: 'admin'
             }));
             res.json(updatedRows);
         });
     } else {
-        // Regular User sees OWN + SHARED
         const sql = `
             SELECT v.*, 'owner' as access_level 
             FROM vehicles v 
             WHERE v.owner_id = ?
-            
             UNION
-            
             SELECT v.*, 'shared' as access_level
             FROM vehicles v
             JOIN vehicle_shares vs ON v.id = vs.vehicle_id
@@ -566,6 +627,10 @@ app.get('/api/vehicles', (req, res) => {
             if (err) return res.status(500).json({ error: err.message });
             const updatedRows = rows.map(v => ({
                 ...v,
+                ownerName: decrypt(v.ownerName),
+                idNumber: decrypt(v.idNumber),
+                plateNumber: decrypt(v.plateNumber),
+                vehicleName: decrypt(v.vehicleName),
                 status: calculateStatus(v.permitExpiryDate, v.isOnHold)
             }));
             res.json(updatedRows);
@@ -574,12 +639,18 @@ app.get('/api/vehicles', (req, res) => {
 });
 
 app.post('/api/vehicles', (req, res) => {
-    const { ownerName, idNumber, plateNumber, permitExpiryDate, modelYear, vehicleName, category, isOnHold } = req.body;
+    let { ownerName, idNumber, plateNumber, permitExpiryDate, modelYear, vehicleName, category, isOnHold } = req.body;
     const ownerId = req.session.userId;
+
+    // Encrypt sensitive data
+    const encOwner = encrypt(ownerName);
+    const encId = encrypt(idNumber);
+    const encPlate = encrypt(plateNumber);
+    const encName = encrypt(vehicleName);
 
     const sql = `INSERT INTO vehicles (ownerName, idNumber, plateNumber, permitExpiryDate, modelYear, vehicleName, category, isOnHold, owner_id)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-    const params = [ownerName, idNumber, plateNumber, permitExpiryDate, modelYear, vehicleName, category, isOnHold ? 1 : 0, ownerId];
+    const params = [encOwner, encId, encPlate, permitExpiryDate, modelYear, encName, category, isOnHold ? 1 : 0, ownerId];
     db.run(sql, params, function (err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ id: this.lastID, status: calculateStatus(permitExpiryDate, isOnHold) });
@@ -598,9 +669,14 @@ app.put('/api/vehicles/:id', (req, res) => {
             return res.status(403).json({ error: 'You can only edit your own vehicles' });
         }
 
+        const encOwner = encrypt(ownerName);
+        const encId = encrypt(idNumber);
+        const encPlate = encrypt(plateNumber);
+        const encName = encrypt(vehicleName);
+
         const sql = `UPDATE vehicles SET ownerName=?, idNumber=?, plateNumber=?, permitExpiryDate=?, modelYear=?, vehicleName=?, category=?, isOnHold=? 
                      WHERE id=?`;
-        const params = [ownerName, idNumber, plateNumber, permitExpiryDate, modelYear, vehicleName, category, isOnHold ? 1 : 0, req.params.id];
+        const params = [encOwner, encId, encPlate, permitExpiryDate, modelYear, encName, category, isOnHold ? 1 : 0, req.params.id];
         db.run(sql, params, function (err) {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ updated: this.changes, status: calculateStatus(permitExpiryDate, isOnHold) });
@@ -650,7 +726,11 @@ app.post('/api/restore', (req, res) => {
                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
 
             vehicles.forEach(v => {
-                stmt.run([v.ownerName, v.idNumber, v.plateNumber, v.permitExpiryDate, v.modelYear, v.vehicleName, v.category, v.isOnHold]);
+                const encOwner = encrypt(v.ownerName);
+                const encId = encrypt(v.idNumber);
+                const encPlate = encrypt(v.plateNumber);
+                const encName = encrypt(v.vehicleName);
+                stmt.run([encOwner, encId, encPlate, v.permitExpiryDate, v.modelYear, encName, v.category, v.isOnHold]);
             });
 
             stmt.finalize((err) => {
