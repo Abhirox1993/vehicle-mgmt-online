@@ -93,13 +93,17 @@ if (useTurso) {
 
     // Wrapper to make Turso client look like sqlite3 for basic queries
     db = {
-        run: (sql, params, callback) => {
+        run: function (sql, params, callback) {
             if (typeof params === 'function') { callback = params; params = []; }
             client.execute({ sql, args: params || [] })
-                .then(res => callback && callback(null, {
-                    lastID: res.lastInsertRowid ? String(res.lastInsertRowid) : null,
-                    changes: Number(res.rowsAffected)
-                }))
+                .then(res => {
+                    if (callback) {
+                        callback.call({
+                            lastID: res.lastInsertRowid ? String(res.lastInsertRowid) : null,
+                            changes: Number(res.rowsAffected)
+                        }, null);
+                    }
+                })
                 .catch(err => callback && callback(err));
         },
         get: (sql, params, callback) => {
@@ -651,8 +655,12 @@ app.post('/api/vehicles', (req, res) => {
     const sql = `INSERT INTO vehicles (ownerName, idNumber, plateNumber, permitExpiryDate, modelYear, vehicleName, category, isOnHold, owner_id)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
     const params = [encOwner, encId, encPlate, permitExpiryDate, modelYear, encName, category, isOnHold ? 1 : 0, ownerId];
+
     db.run(sql, params, function (err) {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) {
+            console.error('[Database Error] POST /api/vehicles:', err.message);
+            return res.status(500).json({ error: err.message });
+        }
         res.json({ id: this.lastID, status: calculateStatus(permitExpiryDate, isOnHold) });
     });
 });
@@ -717,26 +725,38 @@ app.get('/api/backup-json', (req, res) => {
 app.post('/api/restore', (req, res) => {
     const vehicles = req.body;
     if (!Array.isArray(vehicles)) return res.status(400).json({ error: 'Invalid data format' });
+    const ownerId = req.session.userId;
 
     db.serialize(() => {
-        db.run('DELETE FROM vehicles', (err) => {
+        db.run('DELETE FROM vehicles WHERE owner_id = ?', [ownerId], (err) => {
             if (err) return res.status(500).json({ error: err.message });
 
-            const stmt = db.prepare(`INSERT INTO vehicles (ownerName, idNumber, plateNumber, permitExpiryDate, modelYear, vehicleName, category, isOnHold)
-                                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+            const sql = `INSERT INTO vehicles (ownerName, idNumber, plateNumber, permitExpiryDate, modelYear, vehicleName, category, isOnHold, owner_id)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
-            vehicles.forEach(v => {
+            const insertPromises = vehicles.map(v => {
                 const encOwner = encrypt(v.ownerName);
                 const encId = encrypt(v.idNumber);
                 const encPlate = encrypt(v.plateNumber);
                 const encName = encrypt(v.vehicleName);
-                stmt.run([encOwner, encId, encPlate, v.permitExpiryDate, v.modelYear, encName, v.category, v.isOnHold]);
+                const params = [encOwner, encId, encPlate, v.permitExpiryDate, v.modelYear, encName, v.category, v.isOnHold ? 1 : 0, ownerId];
+
+                return new Promise((resolve, reject) => {
+                    db.run(sql, params, (err) => {
+                        if (err) reject(err);
+                        else resolve();
+                    });
+                });
             });
 
-            stmt.finalize((err) => {
-                if (err) return res.status(500).json({ error: err.message });
-                res.json({ success: true, count: vehicles.length });
-            });
+            Promise.all(insertPromises)
+                .then(() => {
+                    res.json({ success: true, count: vehicles.length });
+                })
+                .catch(err => {
+                    console.error('[Restore Error]:', err.message);
+                    res.status(500).json({ error: err.message });
+                });
         });
     });
 });
