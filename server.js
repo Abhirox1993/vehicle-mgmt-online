@@ -12,6 +12,34 @@ const app = express();
 const port = process.env.PORT || 3000;
 const SECRET_SALT = 'vms-license-salt-2025';
 
+// Encryption Setup
+const ENCRYPTION_ALGO = 'aes-256-cbc';
+const ENCRYPTION_KEY = Buffer.from(process.env.ENCRYPTION_KEY || '6c390508f7b3e6488730b20e03e7e4566c390508f7b3e6488730b20e03e7e456', 'hex'); // Default for development
+
+function encrypt(text) {
+    if (!text) return text;
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv(ENCRYPTION_ALGO, ENCRYPTION_KEY, iv);
+    let encrypted = cipher.update(text, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    return iv.toString('hex') + ':' + encrypted;
+}
+
+function decrypt(text) {
+    if (!text || !text.includes(':')) return text;
+    try {
+        const parts = text.split(':');
+        const iv = Buffer.from(parts[0], 'hex');
+        const encryptedText = Buffer.from(parts[1], 'hex');
+        const decipher = crypto.createDecipheriv(ENCRYPTION_ALGO, ENCRYPTION_KEY, iv);
+        let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+        return decrypted;
+    } catch (e) {
+        return text; // Return as-is if decryption fails
+    }
+}
+
 // Determine if running in packaged environment or via VMS_Engine
 const isPkg = typeof process.pkg !== 'undefined';
 const isVmsEngine = process.execPath.toLowerCase().includes('vms_engine.exe');
@@ -260,6 +288,21 @@ app.post('/api/activate', (req, res) => {
     });
 });
 
+// Public Static Files
+app.use(express.static(path.join(__dirname, 'public'), { index: false }));
+
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/index.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/report.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'report.html'));
+});
+
 // Protected Section
 app.use(requireValidLicense);
 app.use(isAuthenticated);
@@ -345,20 +388,6 @@ app.post('/api/users/create', (req, res) => {
     });
 });
 
-// Protected Static Files
-app.use(express.static(path.join(__dirname, 'public'), { index: false }));
-
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-app.get('/index.html', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-app.get('/report.html', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'report.html'));
-});
 
 // Helper: Calculate Status
 function calculateStatus(expiryDate, onHold) {
@@ -532,7 +561,6 @@ app.get('/api/vehicles', (req, res) => {
     const role = req.session.role;
 
     if (role === 'admin') {
-        // Admin sees ALL, plus owner info
         const sql = `
             SELECT v.*, u.username as owner_username 
             FROM vehicles v 
@@ -542,20 +570,21 @@ app.get('/api/vehicles', (req, res) => {
             if (err) return res.status(500).json({ error: err.message });
             const updatedRows = rows.map(v => ({
                 ...v,
+                ownerName: decrypt(v.ownerName),
+                idNumber: decrypt(v.idNumber),
+                plateNumber: decrypt(v.plateNumber),
+                vehicleName: decrypt(v.vehicleName),
                 status: calculateStatus(v.permitExpiryDate, v.isOnHold),
                 access_level: 'admin'
             }));
             res.json(updatedRows);
         });
     } else {
-        // Regular User sees OWN + SHARED
         const sql = `
             SELECT v.*, 'owner' as access_level 
             FROM vehicles v 
             WHERE v.owner_id = ?
-            
             UNION
-            
             SELECT v.*, 'shared' as access_level
             FROM vehicles v
             JOIN vehicle_shares vs ON v.id = vs.vehicle_id
@@ -565,6 +594,10 @@ app.get('/api/vehicles', (req, res) => {
             if (err) return res.status(500).json({ error: err.message });
             const updatedRows = rows.map(v => ({
                 ...v,
+                ownerName: decrypt(v.ownerName),
+                idNumber: decrypt(v.idNumber),
+                plateNumber: decrypt(v.plateNumber),
+                vehicleName: decrypt(v.vehicleName),
                 status: calculateStatus(v.permitExpiryDate, v.isOnHold)
             }));
             res.json(updatedRows);
@@ -573,12 +606,18 @@ app.get('/api/vehicles', (req, res) => {
 });
 
 app.post('/api/vehicles', (req, res) => {
-    const { ownerName, idNumber, plateNumber, permitExpiryDate, modelYear, vehicleName, category, isOnHold } = req.body;
+    let { ownerName, idNumber, plateNumber, permitExpiryDate, modelYear, vehicleName, category, isOnHold } = req.body;
     const ownerId = req.session.userId;
+
+    // Encrypt sensitive data
+    const encOwner = encrypt(ownerName);
+    const encId = encrypt(idNumber);
+    const encPlate = encrypt(plateNumber);
+    const encName = encrypt(vehicleName);
 
     const sql = `INSERT INTO vehicles (ownerName, idNumber, plateNumber, permitExpiryDate, modelYear, vehicleName, category, isOnHold, owner_id)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-    const params = [ownerName, idNumber, plateNumber, permitExpiryDate, modelYear, vehicleName, category, isOnHold ? 1 : 0, ownerId];
+    const params = [encOwner, encId, encPlate, permitExpiryDate, modelYear, encName, category, isOnHold ? 1 : 0, ownerId];
     db.run(sql, params, function (err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ id: this.lastID, status: calculateStatus(permitExpiryDate, isOnHold) });
@@ -597,9 +636,14 @@ app.put('/api/vehicles/:id', (req, res) => {
             return res.status(403).json({ error: 'You can only edit your own vehicles' });
         }
 
+        const encOwner = encrypt(ownerName);
+        const encId = encrypt(idNumber);
+        const encPlate = encrypt(plateNumber);
+        const encName = encrypt(vehicleName);
+
         const sql = `UPDATE vehicles SET ownerName=?, idNumber=?, plateNumber=?, permitExpiryDate=?, modelYear=?, vehicleName=?, category=?, isOnHold=? 
                      WHERE id=?`;
-        const params = [ownerName, idNumber, plateNumber, permitExpiryDate, modelYear, vehicleName, category, isOnHold ? 1 : 0, req.params.id];
+        const params = [encOwner, encId, encPlate, permitExpiryDate, modelYear, encName, category, isOnHold ? 1 : 0, req.params.id];
         db.run(sql, params, function (err) {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ updated: this.changes, status: calculateStatus(permitExpiryDate, isOnHold) });
@@ -649,7 +693,11 @@ app.post('/api/restore', (req, res) => {
                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
 
             vehicles.forEach(v => {
-                stmt.run([v.ownerName, v.idNumber, v.plateNumber, v.permitExpiryDate, v.modelYear, v.vehicleName, v.category, v.isOnHold]);
+                const encOwner = encrypt(v.ownerName);
+                const encId = encrypt(v.idNumber);
+                const encPlate = encrypt(v.plateNumber);
+                const encName = encrypt(v.vehicleName);
+                stmt.run([encOwner, encId, encPlate, v.permitExpiryDate, v.modelYear, encName, v.category, v.isOnHold]);
             });
 
             stmt.finalize((err) => {
