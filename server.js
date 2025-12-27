@@ -56,10 +56,23 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(session({
     secret: 'antigravity-secret-key',
-    resave: false,
+    resave: true, // Improved persistence
     saveUninitialized: false,
-    cookie: { maxAge: 24 * 60 * 60 * 1000 } // 24 hours
+    proxy: true, // Handle Render proxy
+    cookie: {
+        maxAge: 24 * 60 * 60 * 1000,
+        secure: true, // Required for HTTPS on Render
+        sameSite: 'none' // Cross-site compatible for proxies
+    }
 }));
+
+// Debugging Session Middleware
+app.use((req, res, next) => {
+    if (req.path.startsWith('/api/')) {
+        console.log(`[API Request] ${req.method} ${req.path} - Session ID: ${req.sessionID} - User: ${req.session.userId}`);
+    }
+    next();
+});
 
 // Database Setup
 let db;
