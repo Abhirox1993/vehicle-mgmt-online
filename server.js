@@ -52,24 +52,30 @@ const baseDir = (isPkg || isVmsEngine)
 const dbPath = process.env.DATABASE_URL || path.join(baseDir, 'database.sqlite');
 
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin: true,
+    credentials: true
+}));
 app.use(bodyParser.json());
 app.use(session({
-    secret: 'antigravity-secret-key',
-    resave: true, // Improved persistence
+    name: 'vms.sid',
+    secret: 'vms-ultra-secret-key-2025',
+    resave: false,
     saveUninitialized: false,
-    proxy: true, // Handle Render proxy
+    proxy: true,
     cookie: {
         maxAge: 24 * 60 * 60 * 1000,
-        secure: true, // Required for HTTPS on Render
-        sameSite: 'none' // Cross-site compatible for proxies
+        secure: true,
+        httpOnly: true,
+        sameSite: 'lax' // Better compatibility for same-site apps
     }
 }));
 
-// Debugging Session Middleware
+// Granular Logging for Debugging
 app.use((req, res, next) => {
-    if (req.path.startsWith('/api/')) {
-        console.log(`[API Request] ${req.method} ${req.path} - Session ID: ${req.sessionID} - User: ${req.session.userId}`);
+    if (req.path.startsWith('/api/') && req.path !== '/api/login') {
+        const hasSession = !!req.session.userId;
+        console.log(`[API] ${req.method} ${req.path} | Authenticated: ${hasSession} | SID: ${req.sessionID.substring(0, 8)}...`);
     }
     next();
 });
@@ -238,11 +244,13 @@ function requireValidLicense(req, res, next) {
 
 // Auth Middleware
 function isAuthenticated(req, res, next) {
-    if (req.session.userId) {
+    if (req.session && req.session.userId) {
         return next();
     }
+
     if (req.path.startsWith('/api/')) {
-        return res.status(401).json({ error: 'Unauthorized' });
+        console.warn(`[Blocked] Unauthorized API access to ${req.path} | Session object exists: ${!!req.session}`);
+        return res.status(401).json({ error: 'Unauthorized', message: 'Please log in again' });
     }
     res.redirect('/login.html');
 }
