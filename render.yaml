@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: vehicle-management-system
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    disk:
+      name: vms-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        value: /data/database.sqlite

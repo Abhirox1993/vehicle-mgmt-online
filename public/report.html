@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vehicle Management System - System Report</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        :root {
+            --primary: #1e293b;
+            --accent: #38bdf8;
+            --text: #334155;
+            --bg: #f8fafc;
+            --white: #ffffff;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+        }
+
+        #report-content {
+            max-width: 900px;
+            margin: 40px auto;
+            background: var(--white);
+            padding: 60px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            border-radius: 8px;
+        }
+
+        header {
+            border-bottom: 2px solid var(--accent);
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            text-align: center;
+        }
+
+        h1 {
+            color: var(--primary);
+            font-size: 2.5rem;
+            margin: 0;
+        }
+
+        h2 {
+            color: var(--primary);
+            border-left: 4px solid var(--accent);
+            padding-left: 15px;
+            margin-top: 40px;
+            font-size: 1.5rem;
+        }
+
+        h3 {
+            color: var(--primary);
+            font-size: 1.2rem;
+        }
+
+        .subtitle {
+            color: var(--accent);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        th,
+        td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        th {
+            background-color: #f1f5f9;
+            color: var(--primary);
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .feature-card {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .feature-card strong {
+            color: var(--accent);
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .status-badge {
+            background: #dcfce7;
+            color: #166534;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+        }
+
+        .btn-download {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+            transition: all 0.2s;
+        }
+
+        .btn-download:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1);
+        }
+
+        @media print {
+            .controls {
+                display: none;
+            }
+
+            #report-content {
+                box-shadow: none;
+                margin: 0;
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="controls">
+        <button class="btn-download" onclick="downloadPDF()">Download as PDF</button>
+    </div>
+
+    <div id="report-content">
+        <header>
+            <div class="subtitle">Technical Documentation</div>
+            <h1>Vehicle Management System</h1>
+            <p>Full-Stack Fleet Monitoring & Permit Renewal Engine</p>
+        </header>
+
+        <section class="section">
+            <h2>1. Working Principle</h2>
+            <p>The system is designed as a full-stack web application that ensures data persistence and provides an
+                AI-augmented user experience. It operates on four core pillars:</p>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <strong>AI Smart Parsing</strong>
+                    Uses advanced regex patterns to interpret natural language commands, converting human sentences into
+                    structured database records automatically.
+                </div>
+                <div class="feature-card">
+                    <strong>Permanent Storage</strong>
+                    Utilizes a Node.js Express server linked to a SQLite3 database file, ensuring that all data remains
+                    secure and persistent on the host machine.
+                </div>
+                <div class="feature-card">
+                    <strong>Automated Status Engine</strong>
+                    Real-time logic calculates permit validity based on the system date, automatically highlighting
+                    vehicles expiring within 10 days.
+                </div>
+                <div class="feature-card">
+                    <strong>Bulk Data Processing</strong>
+                    Integrated with SheetJS to allow seamless import and export of vehicle records between the database
+                    and professional Excel spreadsheets.
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2>2. System Workflow</h2>
+            <p>The following workflow defines the lifecycle of a vehicle record within the system:</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Phase</th>
+                        <th>Action</th>
+                        <th>Technological Component</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Data Entry</td>
+                        <td>Natural Language Input / Excel Upload</td>
+                        <td>AI Parser / SheetJS Library</td>
+                    </tr>
+                    <tr>
+                        <td>Processing</td>
+                        <td>Validation & Status Calculation</td>
+                        <td>JavaScript Server Logic</td>
+                    </tr>
+                    <tr>
+                        <td>Persistence</td>
+                        <td>SQL Insertion</td>
+                        <td>Express API -> SQLite3</td>
+                    </tr>
+                    <tr>
+                        <td>Monitoring</td>
+                        <td>Dashboard Summarization</td>
+                        <td>Dynamic CSS Glassmorphism UI</td>
+                    </tr>
+                    <tr>
+                        <td>Export</td>
+                        <td>Excel Spreadsheet Generation</td>
+                        <td>Browser-side Buffer Generation</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="section">
+            <h2>3. Testing & Validation Report</h2>
+            <p>Comprehensive testing was conducted to ensure the system meets all functional and aesthetic requirements.
+            </p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Test Case</th>
+                        <th>Description</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>AI Command Parsing</td>
+                        <td>Verify extraction of Name, ID, Plate, and Date from text.</td>
+                        <td><span class="status-badge">PASSED</span></td>
+                    </tr>
+                    <tr>
+                        <td>Database Persistence</td>
+                        <td>Verify data remains after server restart.</td>
+                        <td><span class="status-badge">PASSED</span></td>
+                    </tr>
+                    <tr>
+                        <td>Permit Status Logic</td>
+                        <td>Validate 'Expiring Soon' alert within 10-day window.</td>
+                        <td><span class="status-badge">PASSED</span></td>
+                    </tr>
+                    <tr>
+                        <td>Excel Export/Import</td>
+                        <td>Verify bulk upload and spreadsheet generation.</td>
+                        <td><span class="status-badge">PASSED</span></td>
+                    </tr>
+                    <tr>
+                        <td>Mobile Responsiveness</td>
+                        <td>Verify UI adaptation to small screens.</td>
+                        <td><span class="status-badge">PASSED</span></td>
+                    </tr>
+                    <tr>
+                        <td>Hold Functionality</td>
+                        <td>Verify 'Hold' status overrides standard permit logic.</td>
+                        <td><span class="status-badge">PASSED</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <footer style="margin-top: 60px; text-align: center; color: #94a3b8; font-size: 0.8rem;">
+            Generated on 20/12/2025 by Antigravity AI Systems
+        </footer>
+    </div>
+
+    <script>
+        function downloadPDF() {
+            const element = document.getElementById('report-content');
+            const opt = {
+                margin: 10,
+                filename: 'Vehicle_Management_System_Report.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2 },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+            html2pdf().set(opt).from(element).save();
+        }
+    </script>
+</body>
+
+</html>

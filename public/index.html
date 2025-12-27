@@ -1,0 +1,2721 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vehicle Management System</title>
+    <link rel="icon" type="image/png" href="/icon.png">
+    <!-- User Management Modal -->
+    <div id="userMgmtModal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <h2>User Management</h2>
+            <div style="margin-bottom: 20px; display: flex; justify-content: flex-end;">
+                <button class="btn btn-primary" onclick="openAddUserForm()">
+                    <i data-lucide="plus"></i> Add User
+                </button>
+            </div>
+
+            <div id="userList" style="max-height: 400px; overflow-y: auto;">
+                <!-- Users loaded here -->
+            </div>
+
+            <div id="addUserForm"
+                style="display:none; margin-top: 20px; border-top: 1px solid var(--border); padding-top: 20px;">
+                <h3>Add/Edit User</h3>
+                <input type="hidden" id="editUserId">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="mgmtUsername" class="form-control" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label>Password (Leave blank if not changing)</label>
+                    <input type="password" id="mgmtPassword" class="form-control" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label>Role</label>
+                    <select id="mgmtRole" class="form-control">
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <div class="actions" style="justify-content: flex-end; margin-top: 15px;">
+                    <button type="button" class="btn btn-secondary" onclick="closeUserForm()">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="saveUserBtn">Save</button>
+                </div>
+            </div>
+
+            <div class="actions" style="margin-top: 20px; justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary"
+                    onclick="document.getElementById('userMgmtModal').classList.remove('active')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #1a1f35;
+            --bg-card: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --accent: #38bdf8;
+            --accent-hover: #0ea5e9;
+            --border: rgba(148, 163, 184, 0.2);
+            --glass: rgba(30, 41, 59, 0.6);
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --purple: #a855f7;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0px);
+            }
+
+            50% {
+                transform: translateY(-20px);
+            }
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes glow {
+
+            0%,
+            100% {
+                box-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
+            }
+
+            50% {
+                box-shadow: 0 0 40px rgba(56, 189, 248, 0.6);
+            }
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 20px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Animated Background */
+        .bg-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--accent);
+            border-radius: 50%;
+            animation: float 6s infinite ease-in-out;
+            opacity: 0.3;
+        }
+
+        .gradient-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.3;
+            animation: float 8s infinite ease-in-out;
+        }
+
+        .orb-1 {
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, var(--accent), transparent);
+            top: 10%;
+            left: 10%;
+        }
+
+        .orb-2 {
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, var(--purple), transparent);
+            bottom: 10%;
+            right: 10%;
+            animation-delay: -4s;
+        }
+
+        .orb-3 {
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, var(--success), transparent);
+            top: 50%;
+            left: 50%;
+            animation-delay: -2s;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        header {
+            background: var(--glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 25px 35px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+            animation: slideIn 0.6s ease-out;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            position: relative;
+            z-index: 9999;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .logo i {
+            color: var(--accent);
+            animation: glow 3s infinite;
+        }
+
+        .logo h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent), var(--purple));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .license-badge {
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-left: 10px;
+        }
+
+        .license-badge.trial {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+            border: 1px solid var(--warning);
+        }
+
+        .license-badge.full {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+            border: 1px solid var(--success);
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .btn:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), var(--purple));
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 30px -5px rgba(56, 189, 248, 0.5);
+        }
+
+        .btn-secondary {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-card);
+            transform: translateY(-2px);
+            border-color: var(--accent);
+        }
+
+        /* Stats Dashboard */
+        .stats-dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: var(--glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 30px;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            overflow: hidden;
+            animation: slideIn 0.6s ease-out;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent), var(--purple));
+            transform: scaleX(0);
+            transition: transform 0.3s;
+        }
+
+        .stat-card:hover::before {
+            transform: scaleX(1);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-10px) scale(1.02);
+            box-shadow: 0 25px 50px -10px rgba(0, 0, 0, 0.5);
+            border-color: var(--accent);
+        }
+
+        .stat-card-inner {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 15px;
+        }
+
+        .stat-icon {
+            width: 70px;
+            height: 70px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            position: relative;
+        }
+
+        .stat-card.valid .stat-icon {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.05));
+            color: var(--success);
+        }
+
+        .stat-card.expiring .stat-icon {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(245, 158, 11, 0.05));
+            color: var(--warning);
+        }
+
+        .stat-card.invalid .stat-icon {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.05));
+            color: var(--danger);
+        }
+
+        .stat-card:not(.valid):not(.expiring):not(.invalid) .stat-icon {
+            background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(56, 189, 248, 0.05));
+            color: var(--accent);
+        }
+
+        .stat-info {
+            flex: 1;
+        }
+
+        .stat-label {
+            display: block;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-value {
+            display: block;
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--text-primary), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .stat-progress {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .stat-progress-bar {
+            height: 100%;
+            border-radius: 10px;
+            transition: width 1s ease-out;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card.valid .stat-progress-bar {
+            background: linear-gradient(90deg, var(--success), #34d399);
+        }
+
+        .stat-card.expiring .stat-progress-bar {
+            background: linear-gradient(90deg, var(--warning), #fbbf24);
+        }
+
+        .stat-card.invalid .stat-progress-bar {
+            background: linear-gradient(90deg, var(--danger), #f87171);
+        }
+
+        .stat-card:not(.valid):not(.expiring):not(.invalid) .stat-progress-bar {
+            background: linear-gradient(90deg, var(--accent), var(--purple));
+        }
+
+        .stat-progress-bar::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% {
+                transform: translateX(-100%);
+            }
+
+            100% {
+                transform: translateX(100%);
+            }
+        }
+
+        /* Chart Section */
+        .chart-section {
+            background: var(--glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            animation: slideIn 0.8s ease-out;
+        }
+
+        .chart-grid {
+            display: grid;
+            grid-template-columns: 400px 1fr;
+            gap: 30px;
+            align-items: start;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 250px;
+        }
+
+        .quick-view {
+            max-height: 250px;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+
+        .quick-view::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .quick-view::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+
+        .quick-view::-webkit-scrollbar-thumb {
+            background: var(--accent);
+            border-radius: 10px;
+        }
+
+        .quick-view h3 {
+            color: var(--accent);
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+        }
+
+        .quick-item {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px 16px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s;
+        }
+
+        .quick-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--accent);
+            transform: translateX(5px);
+        }
+
+        .quick-item-info {
+            flex: 1;
+        }
+
+        .quick-item-name {
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .quick-item-details {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .quick-item-date {
+            font-size: 0.85rem;
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        @media (max-width: 768px) {
+            .chart-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Controls */
+        .controls {
+            background: var(--glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 25px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            animation: slideIn 1s ease-out;
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 10px 24px;
+            border: 2px solid var(--border);
+            background: transparent;
+            color: var(--text-primary);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+            position: relative;
+        }
+
+        .filter-btn.active {
+            background: linear-gradient(135deg, var(--accent), var(--purple));
+            color: white;
+            border-color: transparent;
+            box-shadow: 0 10px 25px -5px rgba(56, 189, 248, 0.4);
+        }
+
+        .filter-btn:hover {
+            border-color: var(--accent);
+            transform: translateY(-2px);
+        }
+
+        /* Search Bar */
+        .search-container {
+            position: relative;
+            flex: 1;
+            min-width: 300px;
+            max-width: 500px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 20px 12px 45px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+            outline: none;
+        }
+
+        .search-input:focus {
+            border-color: var(--accent);
+            background: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.2);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+            pointer-events: none;
+            transition: all 0.3s;
+        }
+
+        .search-input:focus+.search-icon {
+            color: var(--accent);
+        }
+
+        /* Vehicle List */
+        .vehicle-list {
+            display: grid;
+            gap: 20px;
+        }
+
+        .vehicle-card {
+            background: var(--glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 28px;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+            animation: slideIn 0.6s ease-out;
+        }
+
+        .vehicle-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: linear-gradient(180deg, var(--accent), var(--purple));
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .vehicle-card:hover::before {
+            opacity: 1;
+        }
+
+        .vehicle-card:hover {
+            transform: translateX(8px);
+            box-shadow: 0 15px 40px -10px rgba(0, 0, 0, 0.4);
+            border-color: var(--accent);
+        }
+
+        .vehicle-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .vehicle-name {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--text-primary), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .status-badge {
+            padding: 8px 20px;
+            border-radius: 25px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            box-shadow: 0 5px 15px -3px rgba(0, 0, 0, 0.3);
+        }
+
+        .status-badge.Valid {
+            background: linear-gradient(135deg, var(--success), #34d399);
+            color: white;
+        }
+
+        .status-badge.Expiring {
+            background: linear-gradient(135deg, var(--warning), #fbbf24);
+            color: white;
+        }
+
+        .status-badge.Invalid {
+            background: linear-gradient(135deg, var(--danger), #f87171);
+            color: white;
+        }
+
+        .status-badge.Hold {
+            background: linear-gradient(135deg, var(--accent), var(--purple));
+            color: white;
+        }
+
+        .vehicle-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .detail-item {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+        }
+
+        .detail-label {
+            font-weight: 700;
+            color: var(--accent);
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .vehicle-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn-edit,
+        .btn-delete {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+            color: white;
+        }
+
+        .btn-edit {
+            background: linear-gradient(135deg, var(--success), #34d399);
+        }
+
+        .btn-edit:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.5);
+        }
+
+        .btn-delete {
+            background: linear-gradient(135deg, var(--danger), #f87171);
+        }
+
+        .btn-delete:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px -5px rgba(239, 68, 68, 0.5);
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(15px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        .modal-content {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 40px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 25px 60px -10px rgba(0, 0, 0, 0.5);
+            animation: slideIn 0.4s ease-out;
+        }
+
+        .modal-content h2 {
+            margin-bottom: 25px;
+            font-size: 1.8rem;
+            background: linear-gradient(135deg, var(--accent), var(--purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .modal-content label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .modal-content input,
+        .modal-content select,
+        .modal-content textarea {
+            width: 100%;
+            padding: 14px;
+            margin-bottom: 20px;
+            background: var(--bg-primary);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-family: inherit;
+            transition: all 0.3s;
+        }
+
+        .modal-content textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+
+        .modal-content input:focus,
+        .modal-content select:focus,
+        .modal-content textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.1);
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .checkbox-label input {
+            width: auto;
+            margin: 0;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        /* Loading Animation */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Dropdown Styles */
+        .dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            right: 0;
+            background: var(--bg-card);
+            min-width: 220px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            z-index: 9999;
+            overflow: hidden;
+            backdrop-filter: blur(20px);
+            margin-top: 10px;
+            transform-origin: top right;
+        }
+
+        /* Show class for JS toggling */
+        .dropdown-content.show {
+            display: block;
+            animation: popUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes popUp {
+            0% {
+                opacity: 0;
+                transform: translateY(-10px) scale(0.9);
+            }
+
+            100% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        /* Arrow for the popup */
+        .dropdown-content::before {
+            content: '';
+            position: absolute;
+            top: -6px;
+            right: 20px;
+            width: 12px;
+            height: 12px;
+            background: var(--bg-card);
+            transform: rotate(45deg);
+            border-left: 1px solid var(--border);
+            border-top: 1px solid var(--border);
+            z-index: 10000;
+        }
+
+        .dropdown-item {
+            color: var(--text-primary);
+            padding: 14px 20px;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.95rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            position: relative;
+            z-index: 10001;
+        }
+
+        .dropdown-item:last-child {
+            border-bottom: none;
+        }
+
+        .dropdown-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+            padding-left: 25px;
+            color: var(--accent);
+        }
+
+        .dropdown-item i {
+            width: 16px;
+            height: 16px;
+        }
+
+        .user-icon {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: var(--accent);
+        }
+
+        .user-icon:hover {
+            background: var(--accent);
+            color: white;
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
+        }
+
+        /* Notification Badge */
+        .notification-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: var(--danger);
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 700;
+            animation: pulse 2s infinite;
+        }
+
+        .notification-bell:hover i {
+            color: var(--accent) !important;
+        }
+
+        /* Vehicle Selection Checkbox */
+        .vehicle-checkbox {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            accent-color: var(--accent);
+        }
+
+        .share-user-item {
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .share-user-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--accent);
+        }
+
+        .share-user-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: var(--accent);
+        }
+
+        .notification-item {
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            margin-bottom: 12px;
+            transition: all 0.3s;
+        }
+
+        .notification-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--accent);
+        }
+
+        .notification-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .notification-item-title {
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .notification-item-details {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+        }
+
+        .notification-actions {
+            display: flex;
+            gap: 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Animated Background -->
+    <div class="bg-animation">
+        <div class="gradient-orb orb-1"></div>
+        <div class="gradient-orb orb-2"></div>
+        <div class="gradient-orb orb-3"></div>
+    </div>
+
+    <div class="container">
+        <header>
+            <div class="logo">
+                <i data-lucide="car" size="36"></i>
+                <h1>Vehicle Management</h1>
+                <div id="licenseStatus" class="license-badge trial" onclick="openLicenseModal()"
+                    style="cursor: pointer;">
+                    Trial Version
+                </div>
+            </div>
+            <div class="actions">
+                <button id="addVehicleBtn" class="btn btn-primary">
+                    <i data-lucide="plus-circle"></i> Add Vehicle
+                </button>
+                <button id="aiEntryBtn" class="btn btn-primary">
+                    <i data-lucide="sparkles"></i> AI Smart Entry
+                </button>
+
+                <!-- Import Dropdown -->
+                <div class="dropdown">
+                    <button class="btn btn-secondary" onclick="toggleDropdown(event, 'importDropdown')">
+                        <i data-lucide="upload"></i> Import <i data-lucide="chevron-down" size="14"></i>
+                    </button>
+                    <div id="importDropdown" class="dropdown-content">
+                        <div class="dropdown-item" id="excelImportBtn">
+                            <i data-lucide="file-spreadsheet"></i> Excel Import
+                        </div>
+                        <div class="dropdown-item" id="restoreBtn">
+                            <i data-lucide="database"></i> Database Restore
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Export Dropdown -->
+                <div class="dropdown">
+                    <button class="btn btn-secondary" onclick="toggleDropdown(event, 'exportDropdown')">
+                        <i data-lucide="download"></i> Export <i data-lucide="chevron-down" size="14"></i>
+                    </button>
+                    <div id="exportDropdown" class="dropdown-content">
+                        <div class="dropdown-item" id="exportBtn">
+                            <i data-lucide="file-spreadsheet"></i> Export Excel
+                        </div>
+                        <div class="dropdown-item" id="backupBtn">
+                            <i data-lucide="database"></i> Database Backup
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notifications -->
+                <div class="notification-bell" onclick="openNotificationsModal()"
+                    style="position: relative; cursor: pointer; margin-right: 10px;">
+                    <i data-lucide="bell" size="24" style="color: var(--text-primary);"></i>
+                    <span id="notificationBadge" class="notification-badge" style="display: none;">0</span>
+                </div>
+
+                <!-- User Dropdown -->
+                <div class="dropdown">
+                    <div class="user-icon" onclick="toggleDropdown(event, 'userDropdown')">
+                        <i data-lucide="user"></i>
+                    </div>
+                    <div id="userDropdown" class="dropdown-content">
+                        <div class="dropdown-item" id="manageUsersBtn" style="display:none;" onclick="openUserMgmt()">
+                            <i data-lucide="users"></i> Manage Users
+                        </div>
+                        <div class="dropdown-item" onclick="openShareVehiclesModal()">
+                            <i data-lucide="share-2"></i> Share Vehicles
+                        </div>
+                        <div class="dropdown-item" id="changePasswordBtn">
+                            <i data-lucide="key"></i> Change Password
+                        </div>
+                        <div class="dropdown-item" onclick="openLicenseModal()">
+                            <i data-lucide="shield-check"></i> License & Activation
+                        </div>
+                        <div class="dropdown-item" id="logoutBtn" style="color: var(--danger);">
+                            <i data-lucide="log-out"></i> Logout
+                        </div>
+                    </div>
+                </div>
+
+                <input type="file" id="restoreFileInput" accept=".json" style="display:none;">
+                <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display:none;">
+            </div>
+        </header>
+
+        <!-- Stats Dashboard -->
+        <div class="stats-dashboard">
+            <div class="stat-card" data-filter="all">
+                <div class="stat-card-inner">
+                    <div class="stat-icon">
+                        <i data-lucide="car"></i>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-label">Total Fleet</span>
+                        <span class="stat-value" id="count-total">0</span>
+                    </div>
+                </div>
+                <div class="stat-progress">
+                    <div class="stat-progress-bar" id="progress-total" style="width: 100%"></div>
+                </div>
+            </div>
+            <div class="stat-card valid" data-filter="valid">
+                <div class="stat-card-inner">
+                    <div class="stat-icon">
+                        <i data-lucide="check-circle"></i>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-label">Valid</span>
+                        <span class="stat-value" id="count-valid">0</span>
+                    </div>
+                </div>
+                <div class="stat-progress">
+                    <div class="stat-progress-bar" id="progress-valid" style="width: 0%"></div>
+                </div>
+            </div>
+            <div class="stat-card expiring" data-filter="expiring">
+                <div class="stat-card-inner">
+                    <div class="stat-icon">
+                        <i data-lucide="alert-triangle"></i>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-label">Expiring Soon</span>
+                        <span class="stat-value" id="count-expiring">0</span>
+                    </div>
+                </div>
+                <div class="stat-progress">
+                    <div class="stat-progress-bar" id="progress-expiring" style="width: 0%"></div>
+                </div>
+            </div>
+            <div class="stat-card invalid" data-filter="invalid">
+                <div class="stat-card-inner">
+                    <div class="stat-icon">
+                        <i data-lucide="x-circle"></i>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-label">Invalid</span>
+                        <span class="stat-value" id="count-invalid">0</span>
+                    </div>
+                </div>
+                <div class="stat-progress">
+                    <div class="stat-progress-bar" id="progress-invalid" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart Section -->
+        <div class="chart-section">
+            <h2 style="margin-bottom: 20px; color: var(--accent);">📊 Fleet Status Overview</h2>
+            <div class="chart-grid">
+                <div class="chart-container">
+                    <canvas id="statusChart"></canvas>
+                </div>
+                <div class="quick-view">
+                    <h3>🚗 Quick View</h3>
+                    <div id="quickViewList"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters & Actions -->
+        <div class="controls">
+            <div class="filter-group">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="expiring">Expiring Soon</button>
+                <button class="filter-btn" data-filter="valid">Valid</button>
+                <button class="filter-btn" data-filter="invalid">Invalid</button>
+                <button class="filter-btn" data-filter="hold">On Hold</button>
+            </div>
+            <div class="search-container">
+                <input type="text" id="vehicleSearch" class="search-input" placeholder="Search by name, plate, ID..."
+                    oninput="handleSearch()">
+                <i data-lucide="search" class="search-icon"></i>
+            </div>
+        </div>
+
+        <!-- Vehicle List -->
+        <div id="vehicleList" class="vehicle-list"></div>
+    </div>
+
+    <!-- AI Entry Modal -->
+    <div id="aiModal" class="modal">
+        <div class="modal-content">
+            <h2>🤖 AI Smart Entry</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 20px;">Describe the vehicle in natural language, and
+                I'll parse it for you!</p>
+            <textarea id="aiInput"
+                placeholder="Example: Add vehicle for John Doe ID 1234 Plate ABC-123 Expiring 2026-10-10 Model 2022 Private"></textarea>
+            <div class="modal-actions">
+                <button id="parseBtn" class="btn btn-primary">Parse & Add</button>
+                <button id="closeAiModal" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <h2 id="modalTitle">Add Vehicle</h2>
+            <form id="vehicleForm">
+                <label>Vehicle Name</label>
+                <input type="text" id="vehicleName" required placeholder="e.g. Toyota Camry">
+
+                <label>Owner Name</label>
+                <input type="text" id="ownerName" required>
+
+                <label>ID Number</label>
+                <input type="text" id="idNumber" required>
+
+                <label>Plate Number</label>
+                <input type="text" id="plateNumber" required>
+
+                <label>Permit Expiry Date</label>
+                <input type="date" id="permitExpiryDate" required>
+
+                <label>Model Year</label>
+                <input type="text" id="modelYear" required>
+
+                <label>Category</label>
+                <select id="category" onchange="toggleCustomCategory(this)">
+                    <option value="Private">Private</option>
+                    <option value="Private Transportation">Private Transportation</option>
+                    <option value="Commercial">Commercial</option>
+                    <option value="Government">Government</option>
+                    <option value="Other">Other (Custom)</option>
+                </select>
+                <input type="text" id="customCategory" placeholder="Enter custom category"
+                    style="display: none; margin-top: -10px;">
+
+                <label class="checkbox-label">
+                    <input type="checkbox" id="isOnHold">
+                    <span>On Hold</span>
+                </label>
+
+                <div class="modal-actions">
+                    <button type="submit" class="btn btn-primary">Save</button>
+                    <button type="button" id="closeEditModal" class="btn btn-secondary">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Password Modal -->
+    <div id="passwordModal" class="modal">
+        <div class="modal-content">
+            <h2>🔐 Change Password</h2>
+            <form id="passwordForm">
+                <label>Current Password</label>
+                <input type="password" id="currentPassword" required placeholder="Enter current password">
+
+                <label>New Password</label>
+                <input type="password" id="newPassword" required placeholder="Enter new password">
+
+                <label>Confirm New Password</label>
+                <input type="password" id="confirmNewPassword" required placeholder="Confirm new password">
+
+                <button type="button" id="closePasswordModal" class="btn btn-secondary">Cancel</button>
+        </div>
+        </form>
+    </div>
+    </div>
+
+    <!-- License Modal -->
+    <div id="licenseModal" class="modal">
+        <div class="modal-content">
+            <h2 id="licenseTitle">Software Activation</h2>
+            <div id="licenseInfo" style="margin-bottom: 20px;">
+                <p style="color: var(--text-secondary); margin-bottom: 15px;">Enjoy the full features of Vehicle
+                    Management System.</p>
+
+                <div class="detail-item"
+                    style="margin-bottom: 10px; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px;">
+                    <span class="detail-label" style="display: block; font-size: 10px; color: var(--accent);">CLIENT
+                        INSTALLATION ID</span>
+                    <span id="installId"
+                        style="font-family: monospace; font-size: 12px; color: var(--text-primary); word-break: break-all;">-</span>
+                    <button onclick="copyInstallId()" class="btn btn-secondary"
+                        style="padding: 4px 8px; font-size: 10px; margin-top: 5px;">Copy</button>
+                </div>
+
+                <div class="detail-item" style="margin-bottom: 15px; display: flex; justify-content: space-between;">
+                    <span class="detail-label">Current Status</span>
+                    <span id="currentLicenseStatus">Trial Version</span>
+                </div>
+                <div id="trialDetails" class="detail-item" style="display: flex; justify-content: space-between;">
+                    <span class="detail-label">Trial Remaining</span>
+                    <span id="trialDays">0 Days</span>
+                </div>
+            </div>
+
+            <div id="activationForm">
+                <label>Enter Serial Key</label>
+                <input type="text" id="serialKey" placeholder="VMS-XXXX-XXXX-XXXX"
+                    style="letter-spacing: 2px; width: 100%; padding: 12px; margin: 10px 0;">
+                <div class="modal-actions" style="margin-top: 20px;">
+                    <button onclick="activateSoftware()" class="btn btn-primary">Activate Full Version</button>
+                    <button type="button" onclick="closeLicenseModal()" class="btn btn-secondary">Maybe Later</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Share Vehicles Modal -->
+    <div id="shareVehiclesModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <h2>📤 Share Vehicles</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 20px;">Select vehicles to share and choose users to
+                share with</p>
+
+            <div style="margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="color: var(--accent); font-size: 1.1rem;">Select Vehicles</h3>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-secondary" onclick="selectAllVehicles()"
+                            style="padding: 8px 16px; font-size: 13px;">
+                            <i data-lucide="check-square" size="16"></i> Select All
+                        </button>
+                        <button class="btn btn-secondary" onclick="deselectAllVehicles()"
+                            style="padding: 8px 16px; font-size: 13px;">
+                            <i data-lucide="square" size="16"></i> Deselect All
+                        </button>
+                    </div>
+                </div>
+                <div id="shareVehicleList"
+                    style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 12px; padding: 15px;">
+                    <!-- Vehicle checkboxes will be populated here -->
+                </div>
+                <p id="selectedVehicleCount" style="margin-top: 10px; color: var(--accent); font-weight: 600;">0
+                    vehicles selected</p>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <h3 style="color: var(--accent); font-size: 1.1rem; margin-bottom: 15px;">Select Users to Share With
+                </h3>
+                <div id="shareUserList"
+                    style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: 12px; padding: 15px;">
+                    <!-- User checkboxes will be populated here -->
+                </div>
+                <p id="selectedUserCount" style="margin-top: 10px; color: var(--accent); font-weight: 600;">0 users
+                    selected</p>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn-primary" onclick="sendShareRequests()">
+                    <i data-lucide="send"></i> Send Share Requests
+                </button>
+                <button class="btn btn-secondary" onclick="closeShareVehiclesModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notifications Modal -->
+    <div id="notificationsModal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <h2>🔔 Share Requests</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 20px;">Review and respond to vehicle share requests
+            </p>
+
+            <div id="notificationsList" style="max-height: 500px; overflow-y: auto;">
+                <!-- Notifications will be populated here -->
+            </div>
+
+            <div class="modal-actions" style="margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="closeNotificationsModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allVehicles = [];
+        let currentFilter = 'all';
+        let searchTerm = '';
+        let editingId = null;
+        let statusChart = null;
+
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // Create particles
+        function createParticles() {
+            const bgAnimation = document.querySelector('.bg-animation');
+            for (let i = 0; i < 30; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.top = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 6 + 's';
+                particle.style.animationDuration = (Math.random() * 4 + 4) + 's';
+                bgAnimation.appendChild(particle);
+            }
+        }
+        createParticles();
+
+        // Animated counter
+        function animateValue(element, start, end, duration) {
+            const range = end - start;
+            const increment = range / (duration / 16);
+            let current = start;
+            const timer = setInterval(() => {
+                current += increment;
+                if ((increment > 0 && current >= end) || (increment < 0 && current <= end)) {
+                    current = end;
+                    clearInterval(timer);
+                }
+                element.textContent = Math.round(current);
+            }, 16);
+        }
+
+        // Fetch vehicles
+        async function fetchVehicles() {
+            try {
+                const res = await fetch('/api/vehicles');
+                allVehicles = await res.json();
+                updateStats();
+                updateChart();
+                renderVehicles();
+            } catch (err) {
+                console.error('Error fetching vehicles:', err);
+            }
+        }
+
+        // Update stats with animation
+        function updateStats() {
+            const total = allVehicles.length;
+            const valid = allVehicles.filter(v => v.status === 'Valid').length;
+            const expiring = allVehicles.filter(v => v.status === 'Expiring Soon').length;
+            const invalid = allVehicles.filter(v => v.status === 'Invalid').length;
+
+            animateValue(document.getElementById('count-total'), 0, total, 1000);
+            animateValue(document.getElementById('count-valid'), 0, valid, 1000);
+            animateValue(document.getElementById('count-expiring'), 0, expiring, 1000);
+            animateValue(document.getElementById('count-invalid'), 0, invalid, 1000);
+
+            // Update progress bars
+            const validPercent = total > 0 ? (valid / total) * 100 : 0;
+            const expiringPercent = total > 0 ? (expiring / total) * 100 : 0;
+            const invalidPercent = total > 0 ? (invalid / total) * 100 : 0;
+
+            setTimeout(() => {
+                document.getElementById('progress-valid').style.width = validPercent + '%';
+                document.getElementById('progress-expiring').style.width = expiringPercent + '%';
+                document.getElementById('progress-invalid').style.width = invalidPercent + '%';
+            }, 100);
+        }
+
+        // Update chart
+        function updateChart() {
+            const total = allVehicles.length;
+            const valid = allVehicles.filter(v => v.status === 'Valid').length;
+            const expiring = allVehicles.filter(v => v.status === 'Expiring Soon').length;
+            const invalid = allVehicles.filter(v => v.status === 'Invalid').length;
+
+            const ctx = document.getElementById('statusChart').getContext('2d');
+
+            if (statusChart) {
+                statusChart.destroy();
+            }
+
+            statusChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Valid', 'Expiring Soon', 'Invalid'],
+                    datasets: [{
+                        data: [valid, expiring, invalid],
+                        backgroundColor: [
+                            'rgba(16, 185, 129, 0.8)',
+                            'rgba(245, 158, 11, 0.8)',
+                            'rgba(239, 68, 68, 0.8)'
+                        ],
+                        borderColor: [
+                            '#10b981',
+                            '#f59e0b',
+                            '#ef4444'
+                        ],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#f1f5f9',
+                                padding: 20,
+                                font: {
+                                    size: 14
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Update quick view list
+            updateQuickView();
+        }
+
+        // Update quick view list
+        function updateQuickView() {
+            const quickViewHtml = allVehicles.slice(0, 10).map(v => {
+                // Check if expired
+                const today = new Date();
+                const expiry = new Date(v.permitExpiryDate);
+                const isExpired = expiry < today;
+                const dateColor = isExpired ? 'color: #ef4444; font-weight: 700;' : 'color: var(--accent); font-weight: 600;';
+
+                return `
+                    <div class="quick-item" onclick="showVehicleDetails(${v.id})" style="cursor: pointer;">
+                        <div class="quick-item-info">
+                            <div class="quick-item-name">${v.ownerName}</div>
+                            <div class="quick-item-details">Plate: ${v.plateNumber}</div>
+                        </div>
+                        <div class="quick-item-date" style="${dateColor}">${v.permitExpiryDate}</div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('quickViewList').innerHTML = quickViewHtml || '<p style="color: var(--text-secondary); text-align: center;">No vehicles yet</p>';
+        }
+
+        // Show vehicle details when clicked from quick view
+        function showVehicleDetails(id) {
+            const vehicle = allVehicles.find(v => v.id === id);
+            if (vehicle) {
+                // Scroll to the vehicle in the main list
+                const vehicleCards = document.querySelectorAll('.vehicle-card');
+                const targetCard = Array.from(vehicleCards).find(card => {
+                    return card.innerHTML.includes(vehicle.ownerName) && card.innerHTML.includes(vehicle.plateNumber);
+                });
+
+                if (targetCard) {
+                    targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    targetCard.style.border = '2px solid var(--accent)';
+                    targetCard.style.boxShadow = '0 0 30px rgba(56, 189, 248, 0.5)';
+
+                    setTimeout(() => {
+                        targetCard.style.border = '1px solid var(--border)';
+                        targetCard.style.boxShadow = '';
+                    }, 2000);
+                }
+            }
+        }
+
+
+
+        // Set filter
+        function setFilter(filter) {
+            currentFilter = filter;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.filter === filter);
+            });
+            renderVehicles();
+        }
+
+        // Filter buttons
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.onclick = () => setFilter(btn.dataset.filter);
+        });
+
+        // Stat cards
+        document.querySelectorAll('.stat-card').forEach(card => {
+            card.onclick = () => setFilter(card.dataset.filter);
+        });
+
+        // AI Entry
+        document.getElementById('aiEntryBtn').onclick = () => {
+            document.getElementById('aiModal').classList.add('active');
+        };
+
+        document.getElementById('closeAiModal').onclick = () => {
+            document.getElementById('aiModal').classList.remove('active');
+        };
+
+        document.getElementById('parseBtn').onclick = () => {
+            const input = document.getElementById('aiInput').value;
+            const parsed = parseAIInput(input);
+            if (parsed) {
+                document.getElementById('ownerName').value = parsed.ownerName || '';
+                document.getElementById('idNumber').value = parsed.idNumber || '';
+                document.getElementById('plateNumber').value = parsed.plateNumber || '';
+                document.getElementById('permitExpiryDate').value = parsed.permitExpiryDate || '';
+                document.getElementById('modelYear').value = parsed.modelYear || '';
+                document.getElementById('category').value = parsed.category || 'Private';
+                document.getElementById('isOnHold').checked = parsed.isOnHold || false;
+
+                document.getElementById('aiModal').classList.remove('active');
+                document.getElementById('editModal').classList.add('active');
+                document.getElementById('modalTitle').textContent = 'Verify AI Parsed Data';
+            }
+        };
+
+        function parseAIInput(text) {
+            const patterns = {
+                ownerName: /(?:for|owner|name)\s+([A-Za-z\s]+?)(?=\s+(?:ID|Plate|Expiring|Model|Category|$))/i,
+                idNumber: /(?:ID|id number)\s+(\d+)/i,
+                plateNumber: /(?:Plate|plate number)\s+([A-Z0-9-]+)/i,
+                permitExpiryDate: /(?:Expiring|expiry|expires?)\s+(\d{4}-\d{2}-\d{2})/i,
+                modelYear: /(?:Model|year)\s+(\d{4})/i,
+                category: /(?:Category|type)\s+(Private|Commercial|Government)/i
+            };
+
+            const result = {};
+            for (const [key, pattern] of Object.entries(patterns)) {
+                const match = text.match(pattern);
+                if (match) result[key] = match[1].trim();
+            }
+
+            return Object.keys(result).length > 0 ? result : null;
+        }
+
+        // Toggle Custom Category
+        function toggleCustomCategory(select) {
+            const customInput = document.getElementById('customCategory');
+            if (select.value === 'Other') {
+                customInput.style.display = 'block';
+                customInput.setAttribute('required', 'true');
+            } else {
+                customInput.style.display = 'none';
+                customInput.removeAttribute('required');
+                customInput.value = '';
+            }
+        }
+
+        // Add Vehicle Button
+        document.getElementById('addVehicleBtn').onclick = () => {
+            document.getElementById('vehicleForm').reset();
+            document.getElementById('modalTitle').textContent = 'Add Vehicle';
+            document.getElementById('customCategory').style.display = 'none';
+            editingId = null;
+            document.getElementById('editModal').classList.add('active');
+        };
+
+        // Edit Modal
+        document.getElementById('closeEditModal').onclick = () => {
+            document.getElementById('editModal').classList.remove('active');
+            editingId = null;
+        };
+
+
+        document.getElementById('vehicleForm').onsubmit = async (e) => {
+            e.preventDefault();
+
+            const categorySelect = document.getElementById('category');
+            let categoryValue = categorySelect.value;
+            if (categoryValue === 'Other') {
+                categoryValue = document.getElementById('customCategory').value;
+            }
+
+            const vehicleData = {
+                ownerName: document.getElementById('ownerName').value,
+                idNumber: document.getElementById('idNumber').value,
+                plateNumber: document.getElementById('plateNumber').value,
+                permitExpiryDate: document.getElementById('permitExpiryDate').value,
+                modelYear: document.getElementById('modelYear').value,
+                vehicleName: document.getElementById('vehicleName').value,
+                category: categoryValue,
+                isOnHold: document.getElementById('isOnHold').checked
+            };
+
+            try {
+                const method = editingId ? 'PUT' : 'POST';
+                const url = editingId ? `/api/vehicles/${editingId}` : '/api/vehicles';
+
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(vehicleData)
+                });
+
+                if (res.ok) {
+                    document.getElementById('editModal').classList.remove('active');
+                    fetchVehicles();
+                } else {
+                    const err = await res.json();
+                    alert('Error: ' + err.error);
+                }
+            } catch (err) {
+                console.error('Error saving vehicle:', err);
+                alert('Failed to save vehicle');
+            }
+        };
+
+        function editVehicle(id) {
+            const v = allVehicles.find(v => v.id === id);
+            if (!v) return;
+
+            editingId = id;
+            document.getElementById('ownerName').value = v.ownerName;
+            document.getElementById('idNumber').value = v.idNumber;
+            document.getElementById('plateNumber').value = v.plateNumber;
+            document.getElementById('permitExpiryDate').value = v.permitExpiryDate;
+            document.getElementById('modelYear').value = v.modelYear;
+            document.getElementById('vehicleName').value = v.vehicleName;
+            document.getElementById('isOnHold').checked = v.isOnHold;
+
+            const categorySelect = document.getElementById('category');
+            if (["Private", "Private Transportation", "Commercial", "Government"].includes(v.category)) {
+                categorySelect.value = v.category;
+                document.getElementById('customCategory').style.display = 'none';
+            } else {
+                categorySelect.value = 'Other';
+                const customInput = document.getElementById('customCategory');
+                customInput.style.display = 'block';
+                customInput.value = v.category;
+            }
+
+            document.getElementById('modalTitle').textContent = 'Edit Vehicle';
+            document.getElementById('editModal').classList.add('active');
+        }
+
+        // Render vehicles
+        function renderVehicles() {
+            const list = document.getElementById('vehicleList');
+            const searchLower = searchTerm.toLowerCase();
+
+            const filtered = allVehicles.filter(v => {
+                // Filter by status
+                if (currentFilter !== 'all') {
+                    if (currentFilter === 'hold' && !v.isOnHold) return false;
+                    if (currentFilter !== 'hold' && v.status.toLowerCase() !== currentFilter && !v.isOnHold) return false;
+                }
+
+                // Search
+                return v.ownerName.toLowerCase().includes(searchLower) ||
+                    v.idNumber.includes(searchLower) ||
+                    v.plateNumber.toLowerCase().includes(searchLower) ||
+                    v.vehicleName.toLowerCase().includes(searchLower);
+            });
+
+            if (filtered.length === 0) {
+                list.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                        <i data-lucide="inbox" size="48" style="margin-bottom: 15px; opacity: 0.5;"></i>
+                        <p>No vehicles found</p>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            list.innerHTML = filtered.map(v => {
+                const isShared = v.access_level === 'shared';
+
+                let ownerBadge = '';
+                if (v.owner_username) { // Admin view
+                    ownerBadge = `<span class="detail-item" style="background: rgba(168, 85, 247, 0.2); color: #d8b4fe; font-size: 0.75rem; padding: 4px 8px;">Owner: ${v.owner_username}</span>`;
+                } else if (isShared) { // User view (Received share)
+                    ownerBadge = `<span class="detail-item" style="background: rgba(56, 189, 248, 0.2); color: #7dd3fc; font-size: 0.75rem; padding: 4px 8px;">Shared with you</span>`;
+                }
+
+                // Calculate status class properly
+                let statusClass = v.status.split(' ')[0]; // Valid, Expiring, Invalid
+                if (v.isOnHold) statusClass = 'Hold';
+
+                return `
+                <div class="vehicle-card">
+                    <div class="vehicle-header">
+                        <div>
+                            <div class="vehicle-name">${v.vehicleName} ${ownerBadge}</div>
+                            <div style="color: var(--text-secondary); font-size: 0.9rem;">${v.plateNumber}</div>
+                        </div>
+                        <div class="status-badge ${statusClass}">${v.isOnHold ? 'On Hold' : v.status}</div>
+                    </div>
+
+                    <div class="vehicle-details">
+                        <div class="detail-item">
+                            <span class="detail-label">Owner Name</span>
+                            ${v.ownerName}
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">ID Number</span>
+                            ${v.idNumber}
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Expiry Date</span>
+                            ${v.permitExpiryDate}
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Model Year</span>
+                            ${v.modelYear}
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Category</span>
+                            ${v.category}
+                        </div>
+                    </div>
+
+                    <div class="vehicle-actions">
+                        <button class="btn-edit" onclick="editVehicle(${v.id})" ${isShared ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>
+                            <i data-lucide="edit-2" size="16"></i> Edit
+                        </button>
+                        <button class="btn-delete" onclick="deleteVehicle(${v.id})" ${isShared ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>
+                            <i data-lucide="trash-2" size="16"></i> Delete
+                        </button>
+                    </div>
+                </div>
+            `}).join('');
+
+            lucide.createIcons();
+        }
+
+        // Search Handler
+        function handleSearch() {
+            searchTerm = document.getElementById('vehicleSearch').value;
+            renderVehicles();
+        }
+
+        async function deleteVehicle(id) {
+            if (!confirm('Are you sure you want to delete this vehicle?')) return;
+            try {
+                const res = await fetch(`/api/vehicles/${id}`, { method: 'DELETE' });
+                if (res.ok) fetchVehicles();
+                else alert('Failed to delete');
+            } catch (err) {
+                console.error('Error deleting:', err);
+            }
+        }
+
+        function editVehicle(id) {
+            const v = allVehicles.find(v => v.id === id);
+            if (!v) return;
+
+            editingId = id;
+            document.getElementById('ownerName').value = v.ownerName;
+            document.getElementById('idNumber').value = v.idNumber;
+            document.getElementById('plateNumber').value = v.plateNumber;
+            document.getElementById('permitExpiryDate').value = v.permitExpiryDate;
+            document.getElementById('modelYear').value = v.modelYear;
+            document.getElementById('vehicleName').value = v.vehicleName;
+            document.getElementById('isOnHold').checked = v.isOnHold;
+
+            const categorySelect = document.getElementById('category');
+            if (["Private", "Private Transportation", "Commercial", "Government"].includes(v.category)) {
+                categorySelect.value = v.category;
+                document.getElementById('customCategory').style.display = 'none';
+            } else {
+                categorySelect.value = 'Other';
+                const customInput = document.getElementById('customCategory');
+                customInput.style.display = 'block';
+                customInput.value = v.category;
+            }
+
+            document.getElementById('modalTitle').textContent = 'Edit Vehicle';
+            document.getElementById('editModal').classList.add('active');
+        }
+
+        // Share Modal Logic
+        let sharingVehicleId = null;
+        function openShareModal(id) {
+            sharingVehicleId = id;
+            document.getElementById('shareModal').classList.add('active');
+            document.getElementById('shareUsername').value = '';
+            document.getElementById('shareResults').innerHTML = '';
+        }
+
+        function closeShareModal() {
+            document.getElementById('shareModal').classList.remove('active');
+            sharingVehicleId = null;
+        }
+
+        async function searchUsersForShare() {
+            const query = document.getElementById('shareUsername').value;
+            if (query.length < 1) return;
+
+            const res = await fetch(`/api/users/search?q=${encodeURIComponent(query)}`);
+            const users = await res.json();
+
+            document.getElementById('shareResults').innerHTML = users.map(u => `
+                <div class="quick-item" onclick="selectUserForShare('${u.username}')" style="cursor:pointer;">
+                    <div class="quick-item-info">${u.username}</div>
+                </div>
+            `).join('');
+        }
+
+        function selectUserForShare(username) {
+            document.getElementById('shareUsername').value = username;
+            document.getElementById('shareResults').innerHTML = '';
+        }
+
+        async function submitShare() {
+            const username = document.getElementById('shareUsername').value;
+            if (!username) return alert('Please enter a username');
+
+            try {
+                const res = await fetch(`/api/vehicles/${sharingVehicleId}/share`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username })
+                });
+
+                const data = await res.json();
+                if (res.ok) {
+                    alert('Vehicle shared successfully!');
+                    closeShareModal();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Failed to share');
+            }
+        }
+
+        // Initial Load
+        fetchVehicles();
+
+        // Excel Import
+        document.getElementById('excelImportBtn').onclick = () => {
+            document.getElementById('excelFileInput').click();
+        };
+
+        document.getElementById('excelFileInput').onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                const data = new Uint8Array(event.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                const rows = XLSX.utils.sheet_to_json(sheet);
+
+                for (const row of rows) {
+                    let idVal = row['QID'] || row['ID Number'] || row['idNumber'] || '';
+                    // Remove .0 suffix if it's a number/float string
+                    if (idVal && !isNaN(idVal)) {
+                        idVal = Math.floor(idVal).toString();
+                    }
+
+                    const vehicle = {
+                        ownerName: row['Qid / NAME'] || row['Owner Name'] || row['ownerName'] || '',
+                        vehicleName: row['Vehicle details'] || row['Vehicle Name'] || row['vehicleName'] || '',
+                        idNumber: idVal,
+                        plateNumber: row['Plate Number'] || row['plateNumber'] || '',
+                        permitExpiryDate: row['Permit Expiry Date'] || row['permitExpiryDate'] || '',
+                        modelYear: row['Model year'] || row['Model Year'] || row['modelYear'] || '',
+                        category: row['Category'] || row['category'] || 'Private',
+                        isOnHold: (row['On Hold'] || row['isOnHold']) ? 1 : 0
+                    };
+
+                    await fetch('/api/vehicles', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(vehicle)
+                    });
+                }
+
+                alert(`Imported ${rows.length} vehicles!`);
+                fetchVehicles();
+            };
+            reader.onerror = (err) => {
+                console.error("File reading error:", err);
+                alert("Error reading file!");
+            };
+            reader.readAsArrayBuffer(file);
+        };
+
+        // Excel Export
+        document.getElementById('exportBtn').onclick = () => {
+            // Format data to match the template
+            const formattedData = allVehicles.map((v, index) => ({
+                'SL NO': index + 1,
+                'Vehicle Name': v.vehicleName || '',
+                'Plate Number': v.plateNumber || '',
+                'Permit Expiry Date': v.permitExpiryDate || '',
+                'Model year': v.modelYear || '',
+                'STATUS': v.status || '',
+                'Owner Name': v.ownerName || '',
+                'QID': v.idNumber || ''
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(formattedData);
+
+            // Set column widths
+            ws['!cols'] = [
+                { wch: 8 },  // SL NO
+                { wch: 25 }, // Vehicle Name
+                { wch: 15 }, // Plate Number
+                { wch: 18 }, // Permit Expiry Date
+                { wch: 12 }, // Model year
+                { wch: 12 }, // STATUS
+                { wch: 20 }, // Owner Name
+                { wch: 15 }  // QID
+            ];
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Vehicles');
+            XLSX.writeFile(wb, 'vehicles.xlsx');
+        };
+
+        // Backup
+        document.getElementById('backupBtn').onclick = async () => {
+            const res = await fetch('/api/backup-json');
+            const data = await res.json();
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'vehicle_backup.json';
+            a.click();
+        };
+
+        // Restore
+        document.getElementById('restoreBtn').onclick = () => {
+            document.getElementById('restoreFileInput').click();
+        };
+
+        document.getElementById('restoreFileInput').onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                try {
+                    const data = JSON.parse(event.target.result);
+                    if (confirm(`Restore ${data.length} vehicles? This will overwrite current data.`)) {
+                        const res = await fetch('/api/restore', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(data)
+                        });
+                        if (res.ok) {
+                            alert('Restore successful!');
+                            fetchVehicles();
+                        } else {
+                            const errData = await res.json();
+                            alert('Restore failed: ' + (errData.error || res.statusText));
+                        }
+                    }
+                } catch (err) {
+                    alert('Invalid backup file');
+                }
+            };
+            reader.readAsText(file);
+        };
+
+        // Password Change Handling
+        document.getElementById('changePasswordBtn').onclick = () => {
+            document.getElementById('passwordForm').reset();
+            document.getElementById('passwordModal').classList.add('active');
+        };
+
+        // --- User Management Logic ---
+        async function checkRole() {
+            try {
+                const res = await fetch('/api/users/me');
+                if (res.ok) {
+                    const user = await res.json();
+                    if (user.role === 'admin') {
+                        document.getElementById('manageUsersBtn').style.display = 'flex';
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to fetch role', e);
+            }
+        }
+        checkRole(); // Run on load
+
+        window.openUserMgmt = async function () {
+            document.getElementById('userMgmtModal').classList.add('active');
+            loadUsers();
+            closeUserForm();
+        }
+
+        async function loadUsers() {
+            try {
+                const res = await fetch('/api/users');
+                const users = await res.json();
+                const list = document.getElementById('userList');
+                list.innerHTML = `
+                    <table style="width: 100%; border-collapse: collapse; color: var(--text-primary);">
+                        <thead style="text-align: left; border-bottom: 1px solid var(--border);">
+                            <tr>
+                                <th style="padding: 10px;">Username</th>
+                                <th style="padding: 10px;">Role</th>
+                                <th style="padding: 10px; text-align: right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${users.map(u => `
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                    <td style="padding: 10px;">${u.username}</td>
+                                    <td style="padding: 10px;">
+                                        <span style="padding: 4px 8px; border-radius: 4px; background: ${u.role === 'admin' ? 'var(--accent)' : 'var(--bg-secondary)'}; font-size: 0.8rem;">
+                                            ${u.role}
+                                        </span>
+                                    </td>
+                                    <td style="padding: 10px; text-align: right;">
+                                        <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="editUser('${u.id}', '${u.username}', '${u.role}')">Edit</button>
+                                        <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem; border-color: var(--danger); color: var(--danger);" onclick="deleteUser('${u.id}')">Delete</button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            } catch (err) {
+                console.error("Failed to load users", err);
+                alert("Failed to load users: " + err.message);
+            }
+        }
+
+        window.openAddUserForm = function () {
+            document.getElementById('addUserForm').style.display = 'block';
+            document.getElementById('userList').style.display = 'none';
+            document.getElementById('editUserId').value = '';
+            document.getElementById('mgmtUsername').value = '';
+            document.getElementById('mgmtPassword').value = '';
+            document.getElementById('mgmtRole').value = 'user';
+        }
+
+        window.closeUserForm = function () {
+            document.getElementById('addUserForm').style.display = 'none';
+            document.getElementById('userList').style.display = 'block';
+        }
+
+        window.editUser = function (id, username, role) {
+            openAddUserForm();
+            document.getElementById('editUserId').value = id;
+            document.getElementById('mgmtUsername').value = username;
+            document.getElementById('mgmtRole').value = role;
+        }
+
+        window.deleteUser = async function (id) {
+            if (!confirm('Are you sure you want to delete this user?')) return;
+            try {
+                const res = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.success) {
+                    loadUsers();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (e) { alert('Failed to delete user'); }
+        }
+
+        document.getElementById('saveUserBtn').onclick = async () => {
+            const id = document.getElementById('editUserId').value;
+            const username = document.getElementById('mgmtUsername').value;
+            const password = document.getElementById('mgmtPassword').value;
+            const role = document.getElementById('mgmtRole').value;
+
+            const payload = { username, password, role };
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `/api/users/${id}` : '/api/users';
+
+            try {
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    closeUserForm();
+                    loadUsers();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (e) {
+                alert('Operation failed');
+            }
+        };
+
+        document.getElementById('closePasswordModal').onclick = () => {
+            document.getElementById('passwordModal').classList.remove('active');
+        };
+
+        document.getElementById('passwordForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const oldPassword = document.getElementById('currentPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmNewPassword = document.getElementById('confirmNewPassword').value;
+
+            if (newPassword !== confirmNewPassword) {
+                alert('New passwords do not match!');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/users/change-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ oldPassword, newPassword })
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    alert('Password updated successfully!');
+                    document.getElementById('passwordModal').classList.remove('active');
+                    document.getElementById('passwordForm').reset();
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to update password'));
+                }
+            } catch (err) {
+                console.error('Password change error:', err);
+                alert('System error occurred');
+            }
+        };
+
+        // Dropdown Toggle Logic
+        function toggleDropdown(e, id) {
+            e.stopPropagation();
+            // Close all other dropdowns
+            const dropdowns = document.getElementsByClassName("dropdown-content");
+            for (let i = 0; i < dropdowns.length; i++) {
+                if (dropdowns[i].id !== id) {
+                    dropdowns[i].classList.remove('show');
+                }
+            }
+            // Toggle current
+            document.getElementById(id).classList.toggle("show");
+        }
+
+        // Close dropdowns when clicking outside
+        window.onclick = function (e) {
+            if (!e.target.matches('.btn') && !e.target.matches('.user-icon') && !e.target.matches('.dropdown-item')) {
+                const dropdowns = document.getElementsByClassName("dropdown-content");
+                for (let i = 0; i < dropdowns.length; i++) {
+                    const openDropdown = dropdowns[i];
+                    if (openDropdown.classList.contains('show')) {
+                        openDropdown.classList.remove('show');
+                    }
+                }
+            }
+        }
+
+        // Logout Handling
+        document.getElementById('logoutBtn').onclick = async () => {
+            try {
+                await fetch('/api/logout');
+                window.location.href = '/login.html';
+            } catch (err) {
+                console.error('Logout error', err);
+                window.location.href = '/login.html';
+            }
+        };
+
+        // License Management
+        function openLicenseModal() {
+            document.getElementById('licenseModal').classList.add('active');
+        }
+
+        function copyInstallId() {
+            const id = document.getElementById('installId').textContent;
+            navigator.clipboard.writeText(id).then(() => {
+                const btn = event.target;
+                const oldText = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => btn.textContent = oldText, 2000);
+            });
+        }
+
+        function closeLicenseModal() {
+            document.getElementById('licenseModal').classList.remove('active');
+        }
+
+        async function checkLicense() {
+            try {
+                const res = await fetch('/api/license-status');
+                const status = await res.json();
+
+                const badge = document.getElementById('licenseStatus');
+                const statusText = document.getElementById('currentLicenseStatus');
+                const trialDiv = document.getElementById('trialDetails');
+                const activationDiv = document.getElementById('activationForm');
+                const installIdSpan = document.getElementById('installId');
+
+                if (installIdSpan) installIdSpan.textContent = status.installId;
+
+                if (status.isActivated) {
+                    badge.textContent = 'Full Version';
+                    badge.className = 'license-badge full';
+                    statusText.textContent = 'Active (Full Lifetime License)';
+                    statusText.style.color = 'var(--success)';
+                    trialDiv.style.display = 'none';
+                    activationDiv.style.display = 'none';
+                } else {
+                    badge.textContent = `Trial: ${status.trialRemaining} Days Left`;
+                    badge.className = 'license-badge trial';
+                    statusText.textContent = 'Trial Version';
+                    document.getElementById('trialDays').textContent = `${status.trialRemaining} Days`;
+
+                    if (status.isExpired) {
+                        badge.textContent = 'Trial Expired';
+                        badge.style.background = 'var(--danger)';
+                        badge.style.color = 'white';
+                        document.getElementById('trialDays').textContent = 'EXPIRED';
+                        document.getElementById('trialDays').style.color = 'var(--danger)';
+
+                        // Force show activation modal if expired
+                        openLicenseModal();
+                    }
+                }
+            } catch (err) {
+                console.error('License check failed');
+            }
+        }
+
+        async function activateSoftware() {
+            const key = document.getElementById('serialKey').value.trim();
+            if (!key) return alert('Please enter a serial key');
+
+            try {
+                const res = await fetch('/api/activate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    alert('Success! Software activated successfully.');
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (err) {
+                alert('Activation failed. Please try again.');
+            }
+        }
+
+        // Share Management Functions
+        let selectedVehicleIds = [];
+        let selectedUserIds = [];
+
+        async function openShareVehiclesModal() {
+            selectedVehicleIds = [];
+            selectedUserIds = [];
+
+            // Load vehicles owned by current user
+            const vehicleListDiv = document.getElementById('shareVehicleList');
+            const ownedVehicles = allVehicles.filter(v => v.access_level === 'owner' || v.access_level === 'admin');
+
+            if (ownedVehicles.length === 0) {
+                vehicleListDiv.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 20px;">No vehicles available to share</p>';
+            } else {
+                vehicleListDiv.innerHTML = ownedVehicles.map(v => `
+                    <div class="share-user-item" onclick="toggleVehicleSelection(${v.id})">
+                        <input type="checkbox" class="vehicle-checkbox" id="vehicle-${v.id}" onclick="event.stopPropagation(); toggleVehicleSelection(${v.id})">
+                        <div style="flex: 1;">
+                            <div style="font-weight: 700; color: var(--text-primary);">${v.vehicleName}</div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">Plate: ${v.plateNumber} | Owner: ${v.ownerName}</div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            // Load users
+            try {
+                const res = await fetch('/api/users/shareable');
+                const users = await res.json();
+                const userListDiv = document.getElementById('shareUserList');
+
+                if (users.length === 0) {
+                    userListDiv.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 20px;">No users available to share with</p>';
+                } else {
+                    userListDiv.innerHTML = users.map(u => `
+                        <div class="share-user-item" onclick="toggleUserSelection(${u.id})">
+                            <input type="checkbox" class="vehicle-checkbox" id="user-${u.id}" onclick="event.stopPropagation(); toggleUserSelection(${u.id})">
+                            <div style="flex: 1;">
+                                <div style="font-weight: 700; color: var(--text-primary);">${u.username}</div>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (err) {
+                console.error('Error loading users:', err);
+            }
+
+            updateSelectionCounts();
+            document.getElementById('shareVehiclesModal').classList.add('active');
+            lucide.createIcons();
+        }
+
+        function closeShareVehiclesModal() {
+            document.getElementById('shareVehiclesModal').classList.remove('active');
+        }
+
+        function toggleVehicleSelection(vehicleId) {
+            const checkbox = document.getElementById(`vehicle-${vehicleId}`);
+            checkbox.checked = !checkbox.checked;
+
+            if (checkbox.checked) {
+                if (!selectedVehicleIds.includes(vehicleId)) {
+                    selectedVehicleIds.push(vehicleId);
+                }
+            } else {
+                selectedVehicleIds = selectedVehicleIds.filter(id => id !== vehicleId);
+            }
+            updateSelectionCounts();
+        }
+
+        function toggleUserSelection(userId) {
+            const checkbox = document.getElementById(`user-${userId}`);
+            checkbox.checked = !checkbox.checked;
+
+            if (checkbox.checked) {
+                if (!selectedUserIds.includes(userId)) {
+                    selectedUserIds.push(userId);
+                }
+            } else {
+                selectedUserIds = selectedUserIds.filter(id => id !== userId);
+            }
+            updateSelectionCounts();
+        }
+
+        function selectAllVehicles() {
+            const checkboxes = document.querySelectorAll('.vehicle-checkbox[id^="vehicle-"]');
+            selectedVehicleIds = [];
+            checkboxes.forEach(cb => {
+                cb.checked = true;
+                const id = parseInt(cb.id.replace('vehicle-', ''));
+                selectedVehicleIds.push(id);
+            });
+            updateSelectionCounts();
+        }
+
+        function deselectAllVehicles() {
+            const checkboxes = document.querySelectorAll('.vehicle-checkbox[id^="vehicle-"]');
+            checkboxes.forEach(cb => cb.checked = false);
+            selectedVehicleIds = [];
+            updateSelectionCounts();
+        }
+
+        function updateSelectionCounts() {
+            document.getElementById('selectedVehicleCount').textContent = `${selectedVehicleIds.length} vehicle${selectedVehicleIds.length !== 1 ? 's' : ''} selected`;
+            document.getElementById('selectedUserCount').textContent = `${selectedUserIds.length} user${selectedUserIds.length !== 1 ? 's' : ''} selected`;
+        }
+
+        async function sendShareRequests() {
+            if (selectedVehicleIds.length === 0) {
+                return alert('Please select at least one vehicle');
+            }
+            if (selectedUserIds.length === 0) {
+                return alert('Please select at least one user');
+            }
+
+            try {
+                const res = await fetch('/api/share-requests', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        vehicleIds: selectedVehicleIds,
+                        targetUserIds: selectedUserIds
+                    })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    alert(`✅ Successfully sent ${data.requestsCreated} share request${data.requestsCreated !== 1 ? 's' : ''}!`);
+                    closeShareVehiclesModal();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (err) {
+                console.error('Error sending share requests:', err);
+                alert('Failed to send share requests');
+            }
+        }
+
+        // Notification Functions
+        async function openNotificationsModal() {
+            await loadPendingRequests();
+            document.getElementById('notificationsModal').classList.add('active');
+        }
+
+        function closeNotificationsModal() {
+            document.getElementById('notificationsModal').classList.remove('active');
+        }
+
+        async function loadPendingRequests() {
+            try {
+                const res = await fetch('/api/share-requests/pending');
+                const requests = await res.json();
+
+                const notificationsDiv = document.getElementById('notificationsList');
+
+                if (requests.length === 0) {
+                    notificationsDiv.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 40px;">No pending share requests</p>';
+                } else {
+                    notificationsDiv.innerHTML = requests.map(req => `
+                        <div class="notification-item">
+                            <div class="notification-item-header">
+                                <span class="notification-item-title">${req.vehicleName}</span>
+                                <span style="font-size: 0.85rem; color: var(--text-secondary);">${new Date(req.created_at).toLocaleDateString()}</span>
+                            </div>
+                            <div class="notification-item-details">
+                                <strong>${req.shared_by_username}</strong> wants to share this vehicle with you<br>
+                                <span style="color: var(--accent);">Plate: ${req.plateNumber}</span> | 
+                                <span>Owner: ${req.ownerName}</span>
+                            </div>
+                            <div class="notification-actions">
+                                <button class="btn btn-primary" onclick="acceptShareRequest(${req.id})" style="padding: 8px 16px; font-size: 13px;">
+                                    <i data-lucide="check" size="16"></i> Accept
+                                </button>
+                                <button class="btn btn-secondary" onclick="rejectShareRequest(${req.id})" style="padding: 8px 16px; font-size: 13px;">
+                                    <i data-lucide="x" size="16"></i> Reject
+                                </button>
+                            </div>
+                        </div>
+                    `).join('');
+                    lucide.createIcons();
+                }
+            } catch (err) {
+                console.error('Error loading pending requests:', err);
+            }
+        }
+
+        async function acceptShareRequest(requestId) {
+            try {
+                const res = await fetch(`/api/share-requests/${requestId}/accept`, {
+                    method: 'POST'
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    alert('✅ Share request accepted!');
+                    await loadPendingRequests();
+                    await updateNotificationBadge();
+                    await fetchVehicles(); // Refresh vehicle list
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (err) {
+                console.error('Error accepting request:', err);
+                alert('Failed to accept request');
+            }
+        }
+
+        async function rejectShareRequest(requestId) {
+            try {
+                const res = await fetch(`/api/share-requests/${requestId}/reject`, {
+                    method: 'POST'
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    alert('❌ Share request rejected');
+                    await loadPendingRequests();
+                    await updateNotificationBadge();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (err) {
+                console.error('Error rejecting request:', err);
+                alert('Failed to reject request');
+            }
+        }
+
+        async function updateNotificationBadge() {
+            try {
+                const res = await fetch('/api/share-requests/pending');
+                const requests = await res.json();
+
+                const badge = document.getElementById('notificationBadge');
+                if (requests.length > 0) {
+                    badge.textContent = requests.length;
+                    badge.style.display = 'flex';
+                } else {
+                    badge.style.display = 'none';
+                }
+            } catch (err) {
+                console.error('Error updating notification badge:', err);
+            }
+        }
+
+
+        // Initialize Lucide icons
+        lucide.createIcons();
+        checkLicense();
+
+        // Load on start
+        fetchVehicles();
+        updateNotificationBadge();
+
+        // Check license every hour
+        setInterval(checkLicense, 3600000);
+        // Check notifications every 30 seconds
+        setInterval(updateNotificationBadge, 30000);
+    </script>
+</body>
+
+</html>
