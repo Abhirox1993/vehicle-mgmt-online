@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const res = await fetch('/api/users/change-password', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({ oldPassword, newPassword })
         });
 
@@ -54,6 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const res = await fetch('/api/users/create', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({ username, password })
         });
 
@@ -80,7 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Fetch and Render
     async function fetchVehicles() {
         try {
-            const res = await fetch('/api/vehicles');
+            const res = await fetch('/api/vehicles', { credentials: 'include' });
             allVehicles = await res.json();
             updateStats();
             renderVehicles();
@@ -180,6 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await fetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify(data)
         });
 
@@ -277,6 +280,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const res = await fetch('/api/restore', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
                         body: JSON.stringify(data)
                     });
                     if (res.ok) {
@@ -336,6 +340,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             const res = await fetch('/api/vehicles', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
+                                credentials: 'include',
                                 body: JSON.stringify({
                                     ownerName: vehicle.ownerName || vehicle['Owner Name'] || vehicle['Qid / NAME'] || '',
                                     idNumber: vehicle.idNumber || vehicle['ID Number'] || vehicle['QID'] || '',
