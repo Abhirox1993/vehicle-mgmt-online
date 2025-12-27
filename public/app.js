@@ -113,9 +113,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         vehicleList.innerHTML = filtered.map(v => `
             <tr>
+                <td>${v.vehicleName || ''}</td>
                 <td>${v.ownerName}</td>
-                <td>${v.idNumber}</td>
                 <td>${v.plateNumber}</td>
+                <td>${v.idNumber}</td>
                 <td>${v.permitExpiryDate}</td>
                 <td>${v.category}</td>
                 <td><span class="status-${v.status.toLowerCase().replace(' ', '-')}">${v.status}</span></td>
@@ -241,10 +242,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Excel Export
     exportExcelBtn.onclick = () => {
-        const worksheet = XLSX.utils.json_to_sheet(allVehicles);
+        const exportData = allVehicles.map(v => ({
+            'Vehicle Name': v.vehicleName || '',
+            'Owner Name': v.ownerName || '',
+            'Plate Number': v.plateNumber || '',
+            'Permit Expiry': v.permitExpiryDate || '',
+            'Category': v.category || '',
+            'QID': v.idNumber || ''
+        }));
+        const worksheet = XLSX.utils.json_to_sheet(exportData);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Vehicles");
-        XLSX.writeFile(workbook, "Vehicle_List_Antigravity.xlsx");
+        XLSX.writeFile(workbook, "Vehicle_Management_Report.xlsx");
     };
 
     // Backup/Restore
@@ -328,9 +337,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
-                                    ownerName: vehicle.ownerName || vehicle['Owner Name'] || '',
-                                    idNumber: vehicle.idNumber || vehicle['ID Number'] || '',
+                                    ownerName: vehicle.ownerName || vehicle['Owner Name'] || vehicle['Qid / NAME'] || '',
+                                    idNumber: vehicle.idNumber || vehicle['ID Number'] || vehicle['QID'] || '',
                                     plateNumber: vehicle.plateNumber || vehicle['Plate Number'] || '',
+                                    vehicleName: vehicle.vehicleName || vehicle['Vehicle details'] || vehicle['Vehicle Name'] || '',
                                     permitExpiryDate: vehicle.permitExpiryDate || vehicle['Permit Expiry'] || '',
                                     modelYear: vehicle.modelYear || vehicle['Model Year'] || new Date().getFullYear(),
                                     category: vehicle.category || vehicle['Category'] || 'Private',
