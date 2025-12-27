@@ -1,5 +1,4 @@
 const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
@@ -34,15 +33,61 @@ app.use(session({
 }));
 
 // Database Setup
-const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-        console.error('Error opening database:', err.message);
-    } else {
-        console.log('Connected to the SQLite database.');
+let db;
+const useTurso = process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN;
 
-        db.serialize(() => {
-            // Vehicles table
-            db.run(`CREATE TABLE IF NOT EXISTS vehicles (
+if (useTurso) {
+    const { createClient } = require('@libsql/client');
+    const client = createClient({
+        url: process.env.TURSO_DATABASE_URL,
+        authToken: process.env.TURSO_AUTH_TOKEN,
+    });
+
+    // Wrapper to make Turso client look like sqlite3 for basic queries
+    db = {
+        run: (sql, params, callback) => {
+            if (typeof params === 'function') { callback = params; params = []; }
+            client.execute({ sql, args: params || [] })
+                .then(res => callback && callback(null, { lastID: res.lastInsertRowid, changes: Number(res.rowsAffected) }))
+                .catch(err => callback && callback(err));
+        },
+        get: (sql, params, callback) => {
+            if (typeof params === 'function') { callback = params; params = []; }
+            client.execute({ sql, args: params || [] })
+                .then(res => callback && callback(null, res.rows[0]))
+                .catch(err => callback && callback(err));
+        },
+        all: (sql, params, callback) => {
+            if (typeof params === 'function') { callback = params; params = []; }
+            client.execute({ sql, args: params || [] })
+                .then(res => callback && callback(null, res.rows))
+                .catch(err => callback && callback(err));
+        },
+        serialize: (fn) => fn(),
+        prepare: (sql) => {
+            return {
+                run: (params, callback) => {
+                    client.execute({ sql, args: params || [] })
+                        .then(() => callback && callback(null))
+                        .catch(err => callback && callback(err));
+                },
+                finalize: (callback) => callback && callback(null)
+            };
+        }
+    };
+    console.log('Using Turso Cloud Database');
+} else {
+    const sqlite3 = require('sqlite3').verbose();
+    db = new sqlite3.Database(dbPath, (err) => {
+        if (err) console.error('Error opening database:', err.message);
+        else console.log('Connected to local SQLite database.');
+    });
+}
+
+// Initial Schema Setup
+db.serialize(() => {
+    // Vehicles table
+    db.run(`CREATE TABLE IF NOT EXISTS vehicles (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 ownerName TEXT,
                 idNumber TEXT,
@@ -56,15 +101,15 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 owner_id INTEGER DEFAULT 0
             )`);
 
-            // Migration: Add owner_id if missing
-            db.run("ALTER TABLE vehicles ADD COLUMN owner_id INTEGER DEFAULT 0", (err) => {
-                if (err && !err.message.includes('duplicate column name')) {
-                    console.error('Migration Error (owner_id):', err.message);
-                }
-            });
+    // Migration: Add owner_id if missing
+    db.run("ALTER TABLE vehicles ADD COLUMN owner_id INTEGER DEFAULT 0", (err) => {
+        if (err && !err.message.includes('duplicate column name')) {
+            console.error('Migration Error (owner_id):', err.message);
+        }
+    });
 
-            // Shares table
-            db.run(`CREATE TABLE IF NOT EXISTS vehicle_shares (
+    // Shares table
+    db.run(`CREATE TABLE IF NOT EXISTS vehicle_shares (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 vehicle_id INTEGER,
                 shared_by_user_id INTEGER,
@@ -74,39 +119,37 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 FOREIGN KEY(shared_to_user_id) REFERENCES users(id)
             )`);
 
-            // Users table for security
-            db.run(`CREATE TABLE IF NOT EXISTS users (
+    // Users table for security
+    db.run(`CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE,
                 password TEXT
             )`, () => {
-                // Ensure role column exists
-                db.run("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'", (err) => { });
+        // Ensure role column exists
+        db.run("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'", (err) => { });
 
-                // Create default admin user if not exists
-                const salt = bcrypt.genSaltSync(10);
-                const hashedPassword = bcrypt.hashSync('admin789', salt);
-                db.run('INSERT OR IGNORE INTO users (username, password, role) VALUES (?, ?, ?)', ['admin', hashedPassword, 'admin']);
-            });
+        // Create default admin user if not exists
+        const salt = bcrypt.genSaltSync(10);
+        const hashedPassword = bcrypt.hashSync('admin789', salt);
+        db.run('INSERT OR IGNORE INTO users (username, password, role) VALUES (?, ?, ?)', ['admin', hashedPassword, 'admin']);
+    });
 
-            // License/System table
-            db.run(`CREATE TABLE IF NOT EXISTS system_config (
+    // License/System table
+    db.run(`CREATE TABLE IF NOT EXISTS system_config (
                 key TEXT PRIMARY KEY,
                 value TEXT
             )`, () => {
-                db.get("SELECT value FROM system_config WHERE key = 'install_date'", (err, row) => {
-                    if (!row) {
-                        db.run("INSERT INTO system_config (key, value) VALUES ('install_date', ?)", [new Date().toISOString()]);
-                    }
-                });
-                db.get("SELECT value FROM system_config WHERE key = 'is_activated'", (err, row) => {
-                    if (!row) {
-                        db.run("INSERT INTO system_config (key, value) VALUES ('is_activated', ?)", ['false']);
-                    }
-                });
-            });
+        db.get("SELECT value FROM system_config WHERE key = 'install_date'", (err, row) => {
+            if (!row) {
+                db.run("INSERT INTO system_config (key, value) VALUES ('install_date', ?)", [new Date().toISOString()]);
+            }
         });
-    }
+        db.get("SELECT value FROM system_config WHERE key = 'is_activated'", (err, row) => {
+            if (!row) {
+                db.run("INSERT INTO system_config (key, value) VALUES ('is_activated', ?)", ['false']);
+            }
+        });
+    });
 });
 
 // License Helpers
