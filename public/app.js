@@ -33,7 +33,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const res = await fetch('/api/users/change-password', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
             body: JSON.stringify({ oldPassword, newPassword })
         });
 
@@ -55,7 +54,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const res = await fetch('/api/users/create', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
             body: JSON.stringify({ username, password })
         });
 
@@ -82,7 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Fetch and Render
     async function fetchVehicles() {
         try {
-            const res = await fetch('/api/vehicles', { credentials: 'include' });
+            const res = await fetch('/api/vehicles');
             allVehicles = await res.json();
             updateStats();
             renderVehicles();
@@ -115,10 +113,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         vehicleList.innerHTML = filtered.map(v => `
             <tr>
-                <td>${v.vehicleName || ''}</td>
                 <td>${v.ownerName}</td>
-                <td>${v.plateNumber}</td>
                 <td>${v.idNumber}</td>
+                <td>${v.plateNumber}</td>
                 <td>${v.permitExpiryDate}</td>
                 <td>${v.category}</td>
                 <td><span class="status-${v.status.toLowerCase().replace(' ', '-')}">${v.status}</span></td>
@@ -182,7 +179,6 @@ document.addEventListener('DOMContentLoaded', () => {
         await fetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
             body: JSON.stringify(data)
         });
 
@@ -245,18 +241,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Excel Export
     exportExcelBtn.onclick = () => {
-        const exportData = allVehicles.map(v => ({
-            'Vehicle Name': v.vehicleName || '',
-            'Owner Name': v.ownerName || '',
-            'Plate Number': v.plateNumber || '',
-            'Permit Expiry': v.permitExpiryDate || '',
-            'Category': v.category || '',
-            'QID': v.idNumber || ''
-        }));
-        const worksheet = XLSX.utils.json_to_sheet(exportData);
+        const worksheet = XLSX.utils.json_to_sheet(allVehicles);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Vehicles");
-        XLSX.writeFile(workbook, "Vehicle_Management_Report.xlsx");
+        XLSX.writeFile(workbook, "Vehicle_List_Antigravity.xlsx");
     };
 
     // Backup/Restore
@@ -280,7 +268,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const res = await fetch('/api/restore', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        credentials: 'include',
                         body: JSON.stringify(data)
                     });
                     if (res.ok) {
@@ -340,12 +327,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             const res = await fetch('/api/vehicles', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                credentials: 'include',
                                 body: JSON.stringify({
-                                    ownerName: vehicle.ownerName || vehicle['Owner Name'] || vehicle['Qid / NAME'] || '',
-                                    idNumber: vehicle.idNumber || vehicle['ID Number'] || vehicle['QID'] || '',
+                                    ownerName: vehicle.ownerName || vehicle['Owner Name'] || '',
+                                    idNumber: vehicle.idNumber || vehicle['ID Number'] || '',
                                     plateNumber: vehicle.plateNumber || vehicle['Plate Number'] || '',
-                                    vehicleName: vehicle.vehicleName || vehicle['Vehicle details'] || vehicle['Vehicle Name'] || '',
                                     permitExpiryDate: vehicle.permitExpiryDate || vehicle['Permit Expiry'] || '',
                                     modelYear: vehicle.modelYear || vehicle['Model Year'] || new Date().getFullYear(),
                                     category: vehicle.category || vehicle['Category'] || 'Private',
