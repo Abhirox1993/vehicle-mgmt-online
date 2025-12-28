@@ -181,6 +181,48 @@ db.serialize(() => {
                 db.run("INSERT INTO system_config (key, value) VALUES ('is_activated', ?)", ['false']);
             }
         });
+
+        // Maintenance Logs
+        db.run(`CREATE TABLE IF NOT EXISTS maintenance_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            vehicle_id INTEGER,
+            service_date TEXT,
+            description TEXT,
+            cost REAL,
+            provider TEXT,
+            FOREIGN KEY(vehicle_id) REFERENCES vehicles(id)
+        )`);
+
+        // Fuel Logs
+        db.run(`CREATE TABLE IF NOT EXISTS fuel_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            vehicle_id INTEGER,
+            date TEXT,
+            liters REAL,
+            total_cost REAL,
+            mileage REAL,
+            FOREIGN KEY(vehicle_id) REFERENCES vehicles(id)
+        )`);
+
+        // Mileage Logs (KM)
+        db.run(`CREATE TABLE IF NOT EXISTS mileage_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            vehicle_id INTEGER,
+            date TEXT,
+            mileage REAL,
+            FOREIGN KEY(vehicle_id) REFERENCES vehicles(id)
+        )`);
+
+        // Service Logs
+        db.run(`CREATE TABLE IF NOT EXISTS service_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            vehicle_id INTEGER,
+            service_date TEXT,
+            description TEXT,
+            cost REAL,
+            provider TEXT,
+            FOREIGN KEY(vehicle_id) REFERENCES vehicles(id)
+        )`);
     });
 });
 
@@ -667,6 +709,94 @@ app.delete('/api/vehicles/:id', (req, res) => {
             res.json({ deleted: this.changes });
         });
     });
+});
+
+// Vehicle Details & Logs
+app.get('/api/vehicles/:id/details', (req, res) => {
+    const vehicleId = req.params.id;
+    const userId = req.session.userId;
+    const role = req.session.role;
+
+    // Check access
+    const accessSql = (role === 'admin')
+        ? "SELECT * FROM vehicles WHERE id = ?"
+        : `SELECT v.* FROM vehicles v 
+           LEFT JOIN vehicle_shares vs ON v.id = vs.vehicle_id 
+           WHERE v.id = ? AND (v.owner_id = ? OR vs.shared_to_user_id = ?)`;
+
+    const accessParams = (role === 'admin') ? [vehicleId] : [vehicleId, userId, userId];
+
+    db.get(accessSql, accessParams, (err, vehicle) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!vehicle) return res.status(404).json({ error: 'Vehicle not found or no access' });
+
+        // Decrypt vehicle fields
+        vehicle.idNumber = decrypt(vehicle.idNumber);
+        vehicle.plateNumber = decrypt(vehicle.plateNumber);
+        vehicle.status = calculateStatus(vehicle.permitExpiryDate, vehicle.isOnHold);
+
+        // Fetch logs
+        const data = { vehicle, maintenance: [], service: [], fuel: [], mileage: [] };
+
+        db.all("SELECT * FROM maintenance_logs WHERE vehicle_id = ? ORDER BY service_date DESC", [vehicleId], (err, maintenance) => {
+            if (!err) data.maintenance = maintenance;
+            db.all("SELECT * FROM service_logs WHERE vehicle_id = ? ORDER BY service_date DESC", [vehicleId], (err, service) => {
+                if (!err) data.service = service;
+                db.all("SELECT * FROM fuel_logs WHERE vehicle_id = ? ORDER BY date DESC", [vehicleId], (err, fuel) => {
+                    if (!err) data.fuel = fuel;
+                    db.all("SELECT * FROM mileage_logs WHERE vehicle_id = ? ORDER BY date DESC", [vehicleId], (err, mileage) => {
+                        if (!err) data.mileage = mileage;
+                        res.json(data);
+                    });
+                });
+            });
+        });
+    });
+});
+
+app.post('/api/vehicles/:id/maintenance', (req, res) => {
+    const { service_date, description, cost, provider } = req.body;
+    db.run("INSERT INTO maintenance_logs (vehicle_id, service_date, description, cost, provider) VALUES (?, ?, ?, ?, ?)",
+        [req.params.id, service_date, description, cost, provider], function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ id: this.lastID, success: true });
+        });
+});
+
+app.post('/api/vehicles/:id/service', (req, res) => {
+    const { service_date, description, cost, provider } = req.body;
+    db.run("INSERT INTO service_logs (vehicle_id, service_date, description, cost, provider) VALUES (?, ?, ?, ?, ?)",
+        [req.params.id, service_date, description, cost, provider], function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ id: this.lastID, success: true });
+        });
+});
+
+app.post('/api/vehicles/:id/fuel', (req, res) => {
+    const { date, liters, total_cost, mileage } = req.body;
+    db.run("INSERT INTO fuel_logs (vehicle_id, date, liters, total_cost, mileage) VALUES (?, ?, ?, ?, ?)",
+        [req.params.id, date, liters, total_cost, mileage], function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ id: this.lastID, success: true });
+        });
+});
+
+app.post('/api/vehicles/:id/fuel', (req, res) => {
+    const { date, liters, total_cost, mileage } = req.body;
+    db.run("INSERT INTO fuel_logs (vehicle_id, date, liters, total_cost, mileage) VALUES (?, ?, ?, ?, ?)",
+        [req.params.id, date, liters, total_cost, mileage], function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ id: this.lastID, success: true });
+        });
+});
+
+app.post('/api/vehicles/:id/mileage', (req, res) => {
+    const { date, mileage } = req.body;
+    db.run("INSERT INTO mileage_logs (vehicle_id, date, mileage) VALUES (?, ?, ?)",
+        [req.params.id, date, mileage], function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ id: this.lastID, success: true });
+        });
 });
 
 // Backup/Restore

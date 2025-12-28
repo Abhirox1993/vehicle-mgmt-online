@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vehicle Details - VMS</title>
+    <link rel="icon" type="image/png" href="/icon.png">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #1a1f35;
+            --bg-card: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --accent: #38bdf8;
+            --accent-hover: #0ea5e9;
+            --border: rgba(148, 163, 184, 0.2);
+            --glass: rgba(30, 41, 59, 0.6);
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --purple: #a855f7;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            background: var(--glass);
+            padding: 20px 30px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+        }
+
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.3s;
+        }
+
+        .back-btn:hover {
+            color: var(--accent);
+        }
+
+        .vehicle-title-area h1 {
+            font-size: 1.8rem;
+            background: linear-gradient(135deg, var(--accent), var(--purple));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 25px;
+        }
+
+        .card {
+            background: var(--glass);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 25px;
+            backdrop-filter: blur(10px);
+            margin-bottom: 25px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .small-stat {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 20px;
+            border-radius: 15px;
+            border: 1px solid var(--border);
+        }
+
+        .small-stat label {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+        }
+
+        .small-stat .value {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 10px;
+        }
+
+        .tab-btn {
+            padding: 8px 20px;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-weight: 600;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+        .tab-btn.active {
+            background: var(--accent);
+            color: white;
+        }
+
+        .log-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .log-table th {
+            text-align: left;
+            color: var(--text-secondary);
+            padding: 12px;
+            font-size: 0.9rem;
+        }
+
+        .log-table td {
+            padding: 12px;
+            border-top: 1px solid var(--border);
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(56, 189, 248, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(5px);
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--bg-secondary);
+            padding: 30px;
+            border-radius: 20px;
+            width: 100%;
+            max-width: 500px;
+            border: 1px solid var(--border);
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--text-secondary);
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: white;
+            outline: none;
+        }
+
+        .chart-container {
+            height: 350px;
+            position: relative;
+        }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .detail-row .label {
+            color: var(--text-secondary);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <a href="index.html" class="back-btn"><i data-lucide="arrow-left"></i> Back to Fleet</a>
+            <div class="vehicle-title-area">
+                <h1 id="vehicleTitle">Loading...</h1>
+                <p id="vehiclePlate" style="color: var(--text-secondary);"></p>
+            </div>
+            <button class="btn btn-secondary" onclick="window.location.href='index.html'">Done</button>
+        </header>
+
+        <div class="stats-grid">
+            <div class="small-stat">
+                <label>Current Mileage</label>
+                <div class="value" id="stat-mileage">0 KM</div>
+            </div>
+            <div class="small-stat">
+                <label>Avg Fuel Consumption</label>
+                <div class="value" id="stat-fuel">0 L/100km</div>
+            </div>
+            <div class="small-stat">
+                <label>Total Maintenance Cost</label>
+                <div class="value" id="stat-cost">QAR 0.00</div>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="main-content">
+                <div class="card">
+                    <h3 style="margin-bottom: 20px; color: var(--accent);">📊 Spending & Mileage Trend</h3>
+                    <div class="chart-container">
+                        <canvas id="mainChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="tabs">
+                        <button class="tab-btn active" onclick="switchTab('maintenance')">Maintenance</button>
+                        <button class="tab-btn" onclick="switchTab('service')">Service Log</button>
+                        <button class="tab-btn" onclick="switchTab('fuel')">Fuel Logs</button>
+                        <button class="tab-btn" onclick="switchTab('km')">KM Logs</button>
+                    </div>
+
+                    <div id="maintenance-tab" class="tab-content">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3>Maintenance History</h3>
+                            <button class="btn btn-primary" onclick="openModal('maintenance')"><i
+                                    data-lucide="plus"></i> Add Maintenance</button>
+                        </div>
+                        <table class="log-table" id="maintenanceTable">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Description</th>
+                                    <th>Provider</th>
+                                    <th>Cost</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+
+                    <div id="service-tab" class="tab-content" style="display: none;">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3>Service Log</h3>
+                            <button class="btn btn-primary" onclick="openModal('service')"><i data-lucide="plus"></i>
+                                Add Service Log</button>
+                        </div>
+                        <table class="log-table" id="serviceTable">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Service Type / Details</th>
+                                    <th>Provider</th>
+                                    <th>Cost</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+
+                    <div id="fuel-tab" class="tab-content" style="display: none;">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3>Fuel Expenses</h3>
+                            <button class="btn btn-primary" onclick="openModal('fuel')"><i data-lucide="plus"></i> Add
+                                Fuel</button>
+                        </div>
+                        <table class="log-table" id="fuelTable">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Liters</th>
+                                    <th>Cost</th>
+                                    <th>Mileage</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+
+                    <div id="km-tab" class="tab-content" style="display: none;">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3>Mileage History</h3>
+                            <button class="btn btn-primary" onclick="openModal('km')"><i data-lucide="plus"></i> Add
+                                KM</button>
+                        </div>
+                        <table class="log-table" id="kmTable">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Mileage (KM)</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar">
+                <div class="card">
+                    <h3 style="margin-bottom: 15px; color: var(--accent);">Vehicle Summary</h3>
+                    <div id="vehicleDetailsSummary">
+                        <!-- Details here -->
+                    </div>
+                </div>
+                <div class="card">
+                    <h3 style="margin-bottom: 15px; color: var(--warning);">Quick Actions</h3>
+                    <button class="btn btn-primary" style="width: 100%; margin-bottom: 10px;"
+                        onclick="location.href='index.html'">
+                        <i data-lucide="edit"></i> Edit Basic Info
+                    </button>
+                    <button class="btn btn-primary" style="width: 100%; background: var(--success);"
+                        onclick="alert('Export functionality coming soon!')">
+                        <i data-lucide="download"></i> Download Report
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="logModal" class="modal">
+        <div class="modal-content">
+            <h2 id="modalTitle">Add Log</h2>
+            <form id="logForm">
+                <div id="formFields"></div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button type="submit" class="btn btn-primary" style="flex: 1;">Save Entry</button>
+                    <button type="button" class="btn btn-secondary" style="flex: 1;"
+                        onclick="closeModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="details.js"></script>
+    <script>lucide.createIcons();</script>
+</body>
+
+</html>

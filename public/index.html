@@ -230,7 +230,7 @@
         .logo h1 {
             font-size: 2rem;
             font-weight: 700;
-            background: linear-gradient(135deg, var(--accent), var(--purple));
+            background: linear-gradient(135deg, #ff4d4d, #f9cb28);
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -419,6 +419,7 @@
             font-weight: 700;
             background: linear-gradient(135deg, var(--text-primary), var(--accent));
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
@@ -709,7 +710,18 @@
             font-weight: 700;
             background: linear-gradient(135deg, var(--text-primary), var(--accent));
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+        }
+
+        .vehicle-name:hover {
+            -webkit-text-fill-color: #ef4444;
+            color: #ef4444;
+            background: none;
+            text-decoration: underline;
         }
 
         .status-badge {
@@ -846,6 +858,7 @@
             font-size: 1.8rem;
             background: linear-gradient(135deg, var(--accent), var(--purple));
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
@@ -1889,7 +1902,7 @@
                 <div class="vehicle-card">
                     <div class="vehicle-header">
                         <div>
-                            <div class="vehicle-name">${v.vehicleName} ${ownerBadge}</div>
+                            <div class="vehicle-name" onclick="window.location.href='details.html?id=${v.id}'">${v.vehicleName} ${ownerBadge}</div>
                             <div style="color: var(--text-secondary); font-size: 0.9rem;">${v.plateNumber}</div>
                         </div>
                         <div class="status-badge ${statusClass}">${v.isOnHold ? 'On Hold' : v.status}</div>
@@ -2719,3 +2732,4 @@
 </body>
 
 </html>
+```
